@@ -2,6 +2,8 @@ import React, { useEffect, useState, useImperativeHandle, forwardRef } from 'rea
 import { useSprings, animated, to as interpolate } from '@react-spring/web'
 import { useDrag } from '@use-gesture/react'
 import styles from './styles.module.css'
+import { API_ENDPOINTS } from '../../config'
+import { logApiCall } from '../../utils/apiLogger'
 
 // Move interfaces to the top
 interface Card {
@@ -34,24 +36,27 @@ function Deck({ onCardChange, onSwipeComplete }: DeckProps, ref: React.Ref<DeckH
 
   useEffect(() => {
     console.log('Fetching cards...')
-    fetch('https://whatdoyousee-api-weatherered-grass-2856.fly.dev/api/cards')
+    fetch(API_ENDPOINTS.cards)
       .then(response => response.json())
       .then(cardsData => {
         const cardsArray = Array.isArray(cardsData) ? cardsData : Object.values(cardsData);
         const randomCards = getRandomCards(cardsArray, CARDS_TO_SHOW);
         const processedCards = randomCards.map((card: Card) => ({
           ...card,
-          image_path: `https://whatdoyousee-api-weatherered-grass-2856.fly.dev/api/cards/${encodeURI(card.image_path.split('/').pop() || '')}`
+          image_path: API_ENDPOINTS.cardImage(card.image_path)
         }));
         
-        console.log('Final processed cards:', processedCards);
+        logApiCall('GET', API_ENDPOINTS.cards, null, processedCards);
         setCards(processedCards);
         
         if (onCardChange && processedCards.length > 0) {
           onCardChange(processedCards[processedCards.length - 1].id);
         }
       })
-      .catch(error => console.error('Error fetching cards:', error));
+      .catch(error => {
+        console.error('Error fetching cards:', error);
+        logApiCall('GET', API_ENDPOINTS.cards, null, null, error);
+      });
   }, [onCardChange]);
 
   // Create springs AFTER we have cards

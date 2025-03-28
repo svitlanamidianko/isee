@@ -10,6 +10,8 @@ import './components/InputControls.css';
 import flyButton from './assets/fly on button.png';
 import { Routes, Route, Link } from 'react-router-dom';
 import CollectiveView from './components/CollectiveView';
+import { API_ENDPOINTS } from './config';
+import { logApiCall } from './utils/apiLogger';
 
 function App() {
   const [userInput, setUserInput] = useState('');
@@ -32,7 +34,7 @@ function App() {
 
   const handleCardChange = useCallback((cardId) => {
     setCurrentCardId(cardId);
-    console.log('Current card ID:', cardId);
+    console.log('♦️ Current card ID:', cardId);
   }, []);
 
   const handleSettingsChange = (setting, value) => {
@@ -50,17 +52,24 @@ function App() {
     try {
       console.log('Submitting entry:', userInput);
       
-      await axios.post('https://whatdoyousee-api-weatherered-grass-2856.fly.dev/api/createuserentry', {
+      const response = await axios.post(API_ENDPOINTS.createUserEntry, {
         entry: userInput,
         user_id: userId,
         game_id: currentGameId,
         card_id: currentCardId
       });
       
+      logApiCall('POST', API_ENDPOINTS.createUserEntry, {
+        entry: userInput,
+        user_id: userId,
+        game_id: currentGameId,
+        card_id: currentCardId
+      }, response.data);
+      
       setUserInput("");
       
       const remainingCards = deckRef.current?.getCardCount() || 0;
-      console.log('Remaining cards:', remainingCards);
+      console.log('♦️ Remaining cards:', remainingCards);
       
       if (remainingCards === 1) {
         if (deckRef.current) {
@@ -72,7 +81,6 @@ function App() {
           console.log('Setting show collective button to true');
         }, 1000);
       } else {
-        console.log('Attempting to trigger swipe...');
         setTimeout(() => {
           if (deckRef.current) {
             console.log('Triggering swipe');
@@ -85,6 +93,13 @@ function App() {
       
     } catch (err) {
       console.error('Submission error:', err);
+      logApiCall('POST', API_ENDPOINTS.createUserEntry, {
+        entry: userInput,
+        user_id: userId,
+        game_id: currentGameId,
+        card_id: currentCardId
+      }, null, err);
+      
       const errorMessage = err.message === 'Network Error' 
         ? 'Unable to connect to the server. Please make sure the server is running.'
         : err.response?.data?.message || 'An unexpected error occurred';
@@ -160,7 +175,6 @@ function App() {
               </div>
             </div>
             
-            {console.log('showCollectiveButton:', showCollectiveButton)}
             {showCollectiveButton && (
               <Link 
                 to={`/collective/${currentGameId}`}

@@ -5,6 +5,8 @@ import MatterAttractors from 'matter-attractors';
 import { motion, AnimatePresence } from 'framer-motion';
 import './CollectiveView.css';
 import { debounce } from 'lodash';
+import { API_ENDPOINTS } from '../config';
+import { logApiCall } from '../utils/apiLogger';
 
 Matter.use(MatterAttractors);
 
@@ -165,15 +167,16 @@ const CollectiveView = () => {
   useEffect(() => {
     const fetchCollectiveData = async () => {
       try {
-        const response = await fetch(`https://whatdoyousee-api-weatherered-grass-2856.fly.dev/api/collective-view/${gameId}`);
+        const response = await fetch(API_ENDPOINTS.collectiveView(gameId));
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        console.log('API Response:', data);
+        logApiCall('GET', API_ENDPOINTS.collectiveView(gameId), null, data);
         setCardsData(data.cards);
       } catch (error) {
         console.error('Error fetching collective view:', error);
+        logApiCall('GET', API_ENDPOINTS.collectiveView(gameId), null, null, error);
       }
     };
 
@@ -367,13 +370,6 @@ const CollectiveView = () => {
       }
     };
   }, []);
-
-  // Add debug logs for render states
-  console.log('Render states:', {
-    centralAttractorState,
-    rectangleStates,
-    cardsDataLength: cardsData.length
-  });
 
   // Add scroll handler
   useEffect(() => {
