@@ -2,14 +2,17 @@ import React, { useEffect, useState, useImperativeHandle, forwardRef } from 'rea
 import { useSprings, animated, to as interpolate } from '@react-spring/web'
 import { useDrag } from '@use-gesture/react'
 import styles from './styles.module.css'
-import { API_ENDPOINTS } from '../../config'
-import { logApiCall } from '../../utils/apiLogger'
+import { API_ENDPOINTS, API_BASE_URL } from '../../config'
 
 // Move interfaces to the top
 interface Card {
   id: string;
-  image_path: string;
-  name: string;
+  media_name: string;
+  media_path: string;
+  order: string;
+  text?: string;
+  url: string;
+  linkie?: string;
 }
 
 interface DeckProps {
@@ -23,39 +26,31 @@ export interface DeckHandle {
   getCardCount: () => number;
 }
 
+function getRandomCards(cards: Card[], count: number): Card[] {
+  const shuffled = [...cards].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
 function Deck({ onCardChange, onSwipeComplete }: DeckProps, ref: React.Ref<DeckHandle>) {
   const CARDS_TO_SHOW = 5
   const [cards, setCards] = useState<Card[]>([])
   const [gone] = useState(() => new Set())
   const [isAnimating, setIsAnimating] = useState(false)
 
-  const getRandomCards = (array: Card[], count: number) => {
-    const shuffled = [...array].sort(() => 0.5 - Math.random())
-    return shuffled.slice(0, count)
-  }
-
   useEffect(() => {
-    console.log('Fetching cards...')
     fetch(API_ENDPOINTS.cards)
       .then(response => response.json())
       .then(cardsData => {
         const cardsArray = Array.isArray(cardsData) ? cardsData : Object.values(cardsData);
         const randomCards = getRandomCards(cardsArray, CARDS_TO_SHOW);
-        const processedCards = randomCards.map((card: Card) => ({
-          ...card,
-          image_path: API_ENDPOINTS.cardImage(card.image_path)
-        }));
+        setCards(randomCards);
         
-        logApiCall('GET', API_ENDPOINTS.cards, null, processedCards);
-        setCards(processedCards);
-        
-        if (onCardChange && processedCards.length > 0) {
-          onCardChange(processedCards[processedCards.length - 1].id);
+        if (onCardChange && randomCards.length > 0) {
+          onCardChange(randomCards[randomCards.length - 1].id);
         }
       })
       .catch(error => {
         console.error('Error fetching cards:', error);
-        logApiCall('GET', API_ENDPOINTS.cards, null, null, error);
       });
   }, [onCardChange]);
 
@@ -198,7 +193,7 @@ function Deck({ onCardChange, onSwipeComplete }: DeckProps, ref: React.Ref<DeckH
             {...bind(i)}
             style={{
               transform: interpolate([rot, scale], trans),
-              backgroundImage: `url(${cards[i].image_path})`,
+              backgroundImage: `url(${API_BASE_URL}${cards[i].url})`,
               backgroundColor: 'white',
               backgroundSize: '100% 100%',
               backgroundRepeat: 'no-repeat',
