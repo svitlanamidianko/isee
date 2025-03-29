@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
 import Matter from 'matter-js';
 import MatterAttractors from 'matter-attractors';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -147,7 +146,6 @@ const CentralCard = ({ position, dimensions, image }) => {
 };
 
 const CollectiveView = () => {
-  const { gameId } = useParams();
   const sceneRef = useRef(null);
   const engineRef = useRef(null);
   const cardImageRef = useRef(null);
@@ -163,40 +161,42 @@ const CollectiveView = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isScrollLocked, setIsScrollLocked] = useState(false);
 
-  // 1. Fetch data
   useEffect(() => {
     const fetchCollectiveData = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.collectiveView(gameId));
+        const response = await fetch(API_ENDPOINTS.cards);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        logApiCall('GET', API_ENDPOINTS.collectiveView(gameId), null, data);
-        setCardsData(data.cards);
+        const transformedData = data.map(card => ({
+          card_id: card.id,
+          image_url: API_ENDPOINTS.cardImage(card.media_path),
+          name: card.media_name,
+          entries: card.text ? [{ entry_text: card.text }] : []
+        }));
+        setCardsData(transformedData);
       } catch (error) {
-        console.error('Error fetching collective view:', error);
-        logApiCall('GET', API_ENDPOINTS.collectiveView(gameId), null, null, error);
+        console.error('Error fetching cards:', error);
       }
     };
 
     fetchCollectiveData();
-  }, [gameId]);
+  }, []);
 
-  // 2. Load image when we have data
   useEffect(() => {
     if (cardsData.length > 0) {
-      console.log('Loading image:', cardsData[0].image_url);
       cardImageRef.current = new Image();
       cardImageRef.current.onload = () => {
-        console.log('Image loaded:', cardImageRef.current.width, cardImageRef.current.height);
         setImageLoaded(true);
+      };
+      cardImageRef.current.onerror = (error) => {
+        console.error('Error loading image:', error);
       };
       cardImageRef.current.src = cardsData[0].image_url;
     }
   }, [cardsData]);
 
-  // 3. Setup Matter.js when image is loaded
   useEffect(() => {
     if (!imageLoaded || !cardsData.length) return;
     console.log('Setting up Matter.js');
@@ -352,7 +352,6 @@ const CollectiveView = () => {
     setupMatterJs();
   }, [imageLoaded, cardsData]);
 
-  // Reset cycle timer
   const resetCycleTimer = () => {
     if (cycleTimerRef.current) {
       clearInterval(cycleTimerRef.current);
@@ -371,7 +370,6 @@ const CollectiveView = () => {
     };
   }, []);
 
-  // Add scroll handler
   useEffect(() => {
     const handleScroll = debounce((e) => {
       if (isTransitioning || !cardsData.length || isScrollLocked) return;
@@ -417,7 +415,6 @@ const CollectiveView = () => {
     };
   }, [cardsData.length, isTransitioning, isScrollLocked]);
 
-  // Modify the central card render to show the stack
   const renderCardStack = () => {
     if (!centralAttractorState || !cardsData.length) return null;
 
@@ -429,6 +426,8 @@ const CollectiveView = () => {
             x: centralAttractorState.position.x,
             y: centralAttractorState.position.y + (index - currentCardIndex) * 4
           };
+
+          const isVideo = card.image_url.endsWith('.mp4') || card.image_url.endsWith('.mov');
 
           return (
             <motion.div
@@ -454,15 +453,30 @@ const CollectiveView = () => {
                 transformStyle: 'preserve-3d',
               }}
             >
-              <motion.img
-                src={card.image_url}
-                alt={card.name}
-                className="w-full h-full rounded-3xl object-contain"
-                style={{
-                  filter: isCurrentCard ? 'none' : 'brightness(0.7)',
-                  transition: 'filter 0.3s ease-out'
-                }}
-              />
+              {isVideo ? (
+                <video
+                  src={card.image_url}
+                  className="w-full h-full rounded-3xl object-contain"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  style={{
+                    filter: isCurrentCard ? 'none' : 'brightness(0.7)',
+                    transition: 'filter 0.3s ease-out'
+                  }}
+                />
+              ) : (
+                <motion.img
+                  src={card.image_url}
+                  alt={card.name}
+                  className="w-full h-full rounded-3xl object-contain"
+                  style={{
+                    filter: isCurrentCard ? 'none' : 'brightness(0.7)',
+                    transition: 'filter 0.3s ease-out'
+                  }}
+                />
+              )}
             </motion.div>
           );
         })}
@@ -474,7 +488,6 @@ const CollectiveView = () => {
     <div className="fixed inset-0 w-full h-full">
       <div ref={sceneRef} className="w-full h-full absolute inset-0 z-10" />
       
-      {/* Replace the CentralCard with our new stack */}
       {renderCardStack()}
 
       <div className="absolute inset-0 z-20 pointer-events-none">

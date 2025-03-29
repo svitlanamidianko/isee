@@ -177,7 +177,7 @@ function App() {
             
             {showCollectiveButton && (
               <Link 
-                to={`/collective/${currentGameId}`}
+                to="/collective"
                 className="collective-button"
               >
                 <img src={flyButton} alt="Take me to collective view" className="fly-button-image" />
@@ -188,7 +188,8 @@ function App() {
             
         
         } />
-        <Route path="/collective/:gameId" element={<CollectiveView />} />
+        <Route path="/collective" element={<CollectiveView />} />
+
       </Routes>
     </div>
   );
