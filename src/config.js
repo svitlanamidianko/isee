@@ -6,5 +6,6 @@ export const API_BASE_URL = 'http://localhost:7777'; // Change this to your loca
 export const API_ENDPOINTS = {
   cards: `${API_BASE_URL}/api/cards`,
   createUserEntry: `${API_BASE_URL}/api/createuserentry`,
-  cardImage: (imagePath) => `${API_BASE_URL}/api/cards/${encodeURI(imagePath.split('/').pop() || '')}`
+  cardImage: (imagePath) => `${API_BASE_URL}/api/cards/${encodeURI(imagePath.split('/').pop() || '')}`,
+  collectiveView: `${API_BASE_URL}/api/collective-view`
 }; 

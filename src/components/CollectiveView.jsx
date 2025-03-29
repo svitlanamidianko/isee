@@ -1,48 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import Matter from 'matter-js';
-import MatterAttractors from 'matter-attractors';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './CollectiveView.css';
 import { debounce } from 'lodash';
-import { API_ENDPOINTS, API_BASE_URL } from '../config';
+import { API_ENDPOINTS } from '../config';
 import { logApiCall } from '../utils/apiLogger';
-
-Matter.use(MatterAttractors);
 
 // Move interfaces to the top
 interface Card {
-  card_id: string;
-  card_name: string;
-  card_url: string;
-  entries: Array<{ entry_text: string }>;
-  linkie: string;
+  id: string;
+  media_name: string;
+  media_path: string;
   order: string;
-  text: string;
+  text?: string;
+  url: string;
+  linkie?: string;
 }
 
-interface EntryProps {
-  text: string;
-  position: { x: number; y: number };
-  dimensions: { width: number; height: number };
-  index: number;
-  cycleCount: number;
-}
-
-interface RectangleState {
-  position: { x: number; y: number };
-  dimensions: { width: number; height: number };
-  entry: { text: string };
-}
-
-interface MatterBody extends Matter.Body {
-  entry?: { text: string };
-}
-
-const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, cycleCount }) => {
-  const entryRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
+const Entry = ({ text, position, dimensions, index, cycleCount }) => {
+  const entryRef = useRef(null);
+  const textRef = useRef(null);
   const [fontSize, setFontSize] = useState(24);
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
@@ -137,31 +115,32 @@ const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, cycleC
   );
 };
 
-const CollectiveView: React.FC = () => {
-  const [cards, setCards] = useState<Card[]>([]);
+const CollectiveView = () => {
+  const [cards, setCards] = useState([]);
   const [gone] = useState(() => new Set());
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [cycleCount, setCycleCount] = useState(0);
-  const cycleTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Matter.js refs and state
-  const sceneRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<Matter.Engine | null>(null);
-  const [rectangleStates, setRectangleStates] = useState<RectangleState[]>([]);
-  const rectanglesRef = useRef<MatterBody[]>([]);
+  const cycleTimerRef = useRef(null);
 
   useEffect(() => {
     const fetchCollectiveData = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.collectiveView);
+        const response = await fetch(API_ENDPOINTS.cards);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        // Sort cards by order field in descending order (highest to lowest)
-        const sortedCards = data.cards.sort((a, b) => parseInt(b.order) - parseInt(a.order));
-        setCards(sortedCards);
+        const transformedData = data.map(card => ({
+          id: card.id,
+          media_name: card.media_name,
+          media_path: card.media_path,
+          order: card.order,
+          text: card.text,
+          url: card.url,
+          linkie: card.linkie
+        }));
+        setCards(transformedData);
       } catch (error) {
         console.error('Error fetching cards:', error);
       }
@@ -176,10 +155,10 @@ const CollectiveView: React.FC = () => {
     from: from(i),
   }));
 
-  const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity: [vx, vy] }) => {
+  const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity }) => {
     if (isAnimating) return;
     
-    const trigger = Math.abs(mx) > 100 || Math.sqrt(vx * vx + vy * vy) > 0.2;
+    const trigger = Math.abs(mx) > 100 || velocity > 0.2;
     const dir = xDir < 0 ? -1 : 1;
     
     if (!active && trigger) {
@@ -189,21 +168,11 @@ const CollectiveView: React.FC = () => {
       // Update current card index
       setCurrentCardIndex(prev => (prev + 1) % cards.length);
       
-      // Update Matter.js bodies with new entries
-      if (rectanglesRef.current) {
-        const newEntries = cards[(currentCardIndex + 1) % cards.length].entries.map(entry => ({ entry_text: entry.entry_text }));
-        rectanglesRef.current.forEach((rect, i) => {
-          if (newEntries[i]) {
-            (rect as any).entry = { text: newEntries[i].entry_text };
-          }
-        });
-      }
-      
       api.start(i => {
         if (index !== i) return;
         const isGone = gone.has(index);
         const x = isGone ? (200 + window.innerWidth) * dir : active ? mx : 0;
-        const rot = mx / 100 + (isGone ? dir * 10 * Math.sqrt(vx * vx + vy * vy) : 0);
+        const rot = mx / 100 + (isGone ? dir * 10 * velocity : 0);
         const scale = active ? 1.1 : 1;
         
         return {
@@ -243,122 +212,6 @@ const CollectiveView: React.FC = () => {
     }
   });
 
-  // Setup Matter.js physics
-  useEffect(() => {
-    if (!cards.length || !sceneRef.current) return;
-
-    const setupMatterJs = () => {
-      const { Engine, Render, World, Bodies, Body, Mouse, MouseConstraint, Composite, Runner } = Matter;
-
-      // Create engine
-      engineRef.current = Engine.create({
-        enableSleeping: false,
-        constraintIterations: 4
-      });
-
-      // Create renderer
-      const render = Render.create({
-        element: sceneRef.current as HTMLElement,
-        engine: engineRef.current,
-        options: {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          wireframes: false,
-          background: 'transparent'
-        }
-      });
-
-      // Physics parameters
-      const params = {
-        friction: {
-          air: 0.131,
-          surface: 0.373,
-          restitution: 0.57,
-          density: 0.02456
-        },
-        mouse: {
-          stiffness: 0.01,
-          damping: 0
-        }
-      };
-
-      // Create rectangles for entries from the next card
-      const nextCardIndex = (currentCardIndex + 1) % cards.length;
-      const entries = cards[nextCardIndex].entries.map(entry => ({ entry_text: entry.entry_text }));
-      
-      rectanglesRef.current = entries.map((entry, i) => {
-        const width = 280 + Math.random() * 40;
-        const height = 160 + Math.random() * 40;
-        const body = Bodies.rectangle(
-          window.innerWidth * Math.random(),
-          window.innerHeight * Math.random(),
-          width,
-          height,
-          {
-            frictionAir: params.friction.air,
-            friction: params.friction.surface,
-            restitution: params.friction.restitution,
-            inertia: Infinity,
-            density: params.friction.density,
-            chamfer: { radius: 12 },
-            render: { fillStyle: 'transparent', lineWidth: 0 }
-          }
-        ) as MatterBody;
-        (body as any).entry = { text: entry.entry_text };
-        return body;
-      });
-
-      // Mouse control
-      const mouse = Mouse.create(render.canvas);
-      const mouseConstraint = MouseConstraint.create(engineRef.current, {
-        mouse,
-        constraint: {
-          stiffness: params.mouse.stiffness,
-          damping: params.mouse.damping,
-          render: { visible: false }
-        }
-      });
-
-      // Add all bodies to world
-      World.add(engineRef.current.world, [
-        ...rectanglesRef.current,
-        mouseConstraint
-      ]);
-
-      // Start engine and renderer
-      const runner = Runner.create();
-      Runner.run(runner, engineRef.current);
-      Render.run(render);
-
-      // Update states
-      Matter.Events.on(engineRef.current, 'afterUpdate', () => {
-        setRectangleStates(
-          rectanglesRef.current.map(rect => ({
-            position: rect.position,
-            dimensions: {
-              width: rect.bounds.max.x - rect.bounds.min.x - 20,
-              height: rect.bounds.max.y - rect.bounds.min.y - 20
-            },
-            entry: (rect as any).entry || { text: '' }
-          }))
-        );
-      });
-
-      // Cleanup
-      return () => {
-        Runner.stop(runner);
-        Render.stop(render);
-        if (engineRef.current) {
-          World.clear(engineRef.current.world, true);
-          Engine.clear(engineRef.current);
-        }
-        render.canvas.remove();
-      };
-    };
-
-    setupMatterJs();
-  }, [cards, currentCardIndex]);
-
   const resetCycleTimer = () => {
     if (cycleTimerRef.current) {
       clearInterval(cycleTimerRef.current);
@@ -381,9 +234,7 @@ const CollectiveView: React.FC = () => {
 
   return (
     <div className="fixed inset-0 w-full h-full">
-      <div ref={sceneRef} className="w-full h-full absolute inset-0 z-10" />
-      
-      <div className="w-full h-full absolute inset-0 z-20">
+      <div className="w-full h-full absolute inset-0 z-10">
         {props.map(({ x, y, rot, scale }, i) => (
           <animated.div 
             key={i} 
@@ -404,54 +255,32 @@ const CollectiveView: React.FC = () => {
               {...bind(i)}
               style={{
                 transform: interpolate([rot, scale], trans),
+                backgroundImage: `url(${API_ENDPOINTS.cardImage(cards[i].media_path)})`,
                 backgroundColor: 'white',
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
                 width: '600px',
                 height: '900px',
                 borderRadius: '10px',
                 boxShadow: '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)',
-                overflow: 'hidden'
               }}
-            >
-              {cards[i].card_url.match(/\.(mov|mp4)$/i) ? (
-                <video
-                  src={`${API_BASE_URL}${cards[i].card_url}`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                />
-              ) : (
-                <img
-                  src={`${API_BASE_URL}${cards[i].card_url}`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  alt={cards[i].card_name}
-                />
-              )}
-            </animated.div>
+            />
           </animated.div>
         ))}
       </div>
 
-      <div className="absolute inset-0 z-30 pointer-events-none">
-        {rectangleStates.map((rect, index) => (
+      <div className="absolute inset-0 z-20 pointer-events-none">
+        {cards[currentCardIndex]?.text && (
           <Entry
-            key={`entry-${index}-${cycleCount}-${currentCardIndex}`}
-            text={rect.entry.text}
-            position={rect.position}
-            dimensions={rect.dimensions}
-            index={index}
+            key={`entry-${cycleCount}-${currentCardIndex}`}
+            text={cards[currentCardIndex].text}
+            position={{ x: window.innerWidth / 2, y: window.innerHeight / 2 }}
+            dimensions={{ width: 400, height: 200 }}
+            index={0}
             cycleCount={cycleCount}
           />
-        ))}
+        )}
       </div>
     </div>
   );
