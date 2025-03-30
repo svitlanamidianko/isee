@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Matter from 'matter-js';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Matter, { Bodies, World, Mouse, MouseConstraint } from 'matter-js';
 import MatterAttractors from 'matter-attractors';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
@@ -8,6 +8,8 @@ import './StoryView.css';
 import debounce from 'lodash/debounce';
 import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import { logApiCall } from '../utils/apiLogger';
+import CommentInput from './CommentInput';
+import IntroPage from './IntroPage';
 
 Matter.use(MatterAttractors);
 
@@ -165,12 +167,14 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
 };
 
 const StoryView: React.FC = () => {
+  const [hasAccess, setHasAccess] = useState(false);
   const [cards, setCards] = useState<Card[]>([]);
   const [gone] = useState(() => new Set());
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [cycleCount, setCycleCount] = useState(0);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
+  const [allCardsSwiped, setAllCardsSwiped] = useState(false);
   const cycleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Matter.js refs and state
@@ -192,7 +196,7 @@ const StoryView: React.FC = () => {
         const data = await response.json();
         console.log('API Response:', data);
         // Sort cards in descending order (highest to lowest)
-        const sortedCards = data.cards.sort((a, b) => parseInt(b.order) - parseInt(a.order));
+        const sortedCards = data.cards.sort((a: Card, b: Card) => parseInt(b.order) - parseInt(a.order));
         console.log('Sorted Cards:', sortedCards);
         setCards(sortedCards);
       } catch (error) {
@@ -209,115 +213,146 @@ const StoryView: React.FC = () => {
     from: from(i),
   }));
 
-  const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity: [vx, vy] }) => {
+  // Add the bind function from useDrag
+  const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity }) => {
     if (isAnimating) return;
-    
-    const trigger = Math.abs(mx) > 100 || Math.sqrt(vx * vx + vy * vy) > 0.2;
+    const trigger = Math.abs(mx) > 100 || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > 0.2;
     const dir = xDir < 0 ? -1 : 1;
     
     if (!active && trigger) {
-      setIsAnimating(true);
-      gone.add(index);
-      
-      // Update current card index
-      const nextCardIndex = (currentCardIndex + 1) % cards.length;
-      setCurrentCardIndex(nextCardIndex);
-      
-      // Update Matter.js bodies with new entries
-      if (rectanglesRef.current) {
-        const visibleCardIndex = cards.length - 1 - [...gone].length;
-        const visibleCard = cards[visibleCardIndex];
-        console.log('Visible card:', visibleCard); // Debug log
-        console.log('Visible card entries:', visibleCard.entries); // Debug log
-        
-        // Create new bodies for each entry
-        rectanglesRef.current = visibleCard.entries.map((entry, i) => {
-          const width = 280 + Math.random() * 40;
-          const height = 160 + Math.random() * 40;
-          const body = Bodies.rectangle(
-            window.innerWidth / 2 + (visibleCard.is_horizontal ? 675 : 281.25) / 2 + 50,
-            window.innerHeight / 2 - (visibleCard.entries.length * height) / 2 + i * height,
-            width,
-            height,
-            {
-              frictionAir: 0,
-              friction: 0,
-              restitution: 0,
-              inertia: Infinity,
-              density: 0,
-              chamfer: { radius: 12 },
-              render: { fillStyle: 'transparent', lineWidth: 0 }
-            }
-          ) as MatterBody;
-          (body as any).entry = { text: entry.entry_text };
-          console.log('Created body with entry:', entry.entry_text); // Debug log
-          return body;
-        });
-
-        // Update the world with new bodies
-        if (engineRef.current) {
-          World.clear(engineRef.current.world, true);
-          World.add(engineRef.current.world, [
-            ...rectanglesRef.current,
-            MouseConstraint.create(engineRef.current, {
-              mouse: Mouse.create(engineRef.current.render.canvas),
-              constraint: {
-                stiffness: 0.01,
-                damping: 0,
-                render: { visible: false }
-              }
-            })
-          ]);
-        }
-      }
-      
-      api.start(i => {
-        if (index !== i) return;
-        const isGone = gone.has(index);
-        const x = isGone ? (200 + window.innerWidth) * dir : active ? mx : 0;
-        const rot = mx / 100 + (isGone ? dir * 10 * Math.sqrt(vx * vx + vy * vy) : 0);
-        const scale = active ? 1.1 : 1;
-        
-        return {
-          x,
-          rot,
-          scale,
-          delay: undefined,
-          config: { friction: 50, tension: active ? 800 : isGone ? 200 : 500 },
-          onRest: () => {
-            setIsAnimating(false);
-          }
-        };
-      });
-    } else {
-      // Handle active dragging
-      api.start(i => {
-        if (index !== i) return;
-        const x = active ? mx : 0;
-        const rot = active ? mx / 100 : 0;
-        const scale = active ? 1.1 : 1;
-        
-        return {
-          x,
-          rot,
-          scale,
-          delay: undefined,
-          config: { friction: 50, tension: active ? 800 : 500 },
-        };
-      });
-    }
-
-    if (!active && gone.size === cards.length) {
-      setTimeout(() => {
-        gone.clear();
-        api.start(i => to(i));
-      }, 600);
+      swipeCard(dir);
     }
   });
 
+  // Memoize the swipeCard function
+  const swipeCard = useCallback((direction: number) => {
+    console.log('swipeCard called with direction:', direction);
+    
+    if (isAnimating || cards.length === 0) {
+      console.log('Swipe prevented - isAnimating or no cards');
+      return;
+    }
+    
+    const now = Date.now();
+    if (now - lastSwipeTime.current < 150) {
+      console.log('Swipe prevented - cooldown');
+      return;
+    }
+    lastSwipeTime.current = now;
+    
+    const topCardIndex = cards.length - 1 - [...gone].length;
+    console.log('Swiping card at index:', topCardIndex);
+    
+    setIsAnimating(true);
+    gone.add(topCardIndex);
+    
+    // Update current card index
+    const nextCardIndex = (currentCardIndex + 1) % cards.length;
+    setCurrentCardIndex(nextCardIndex);
+    
+    // First trigger the card animation
+    api.start(i => {
+      if (topCardIndex !== i) return;
+      
+      const x = (200 + window.innerWidth) * direction;
+      const rot = direction * 10;
+      
+      return {
+        x,
+        rot,
+        scale: 1,
+        delay: undefined,
+        config: { friction: 50, tension: 200 },
+        onRest: () => {
+          console.log('Animation completed');
+          setIsAnimating(false);
+          
+          // After card animation completes, update Matter.js bodies
+          if (engineRef.current) {
+            const currentCard = cards[nextCardIndex];
+            console.log('Setting up new entries for card:', currentCard);
+            
+            // Create new bodies for each entry
+            rectanglesRef.current = currentCard.entries.map((entry, i) => {
+              const width = 280 + Math.random() * 40;
+              const height = 160 + Math.random() * 40;
+              const body = Bodies.rectangle(
+                window.innerWidth / 2 + (currentCard.is_horizontal ? 675 : 281.25) / 2 + 50,
+                window.innerHeight / 2 - (currentCard.entries.length * height) / 2 + i * height,
+                width,
+                height,
+                {
+                  frictionAir: 0,
+                  friction: 0,
+                  restitution: 0,
+                  inertia: Infinity,
+                  density: 0,
+                  chamfer: { radius: 12 },
+                  render: { fillStyle: 'transparent', lineWidth: 0 }
+                }
+              ) as MatterBody;
+              (body as any).entry = { text: entry.entry_text };
+              console.log('Created body with entry:', entry.entry_text);
+              return body;
+            });
+
+            // Update the world with new bodies
+            World.clear(engineRef.current.world, true);
+            World.add(engineRef.current.world, [
+              ...rectanglesRef.current,
+              MouseConstraint.create(engineRef.current, {
+                mouse: Mouse.create(engineRef.current.render.canvas),
+                constraint: {
+                  stiffness: 0.01,
+                  damping: 0,
+                  render: { visible: false }
+                }
+              })
+            ]);
+          }
+
+          // Reset cards if we've gone through all of them
+          if (gone.size === cards.length) {
+            gone.clear();
+            api.start(i => to(i));
+            setAllCardsSwiped(true);
+          }
+        }
+      };
+    });
+  }, [isAnimating, cards, currentCardIndex, gone, api]);
+
+  // Modify the keyboard event listener
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      console.log('Key pressed:', event.key);
+      if (event.key === 'ArrowRight') {
+        console.log('Right arrow pressed');
+        event.preventDefault();
+        
+        const topCardIndex = cards.length - 1 - [...gone].length;
+        console.log('topCardIndex:', topCardIndex);
+        
+        if (topCardIndex >= 0 && !isAnimating) {
+          console.log('Attempting to swipe card');
+          swipeCard(1);
+        }
+      }
+    };
+
+    // Add tabindex to make the component focusable
+    if (sceneRef.current) {
+      sceneRef.current.tabIndex = 0;
+      sceneRef.current.focus();
+    }
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isAnimating, cards.length, gone, swipeCard]);
+
   // Setup Matter.js physics
   useEffect(() => {
-    if (!cards.length || !sceneRef.current) return;
+    if (!hasAccess || !cards.length || !sceneRef.current) return;
 
     const setupMatterJs = () => {
       const { Engine, Render, World, Bodies, Body, Mouse, MouseConstraint, Composite, Runner } = Matter;
@@ -340,23 +375,22 @@ const StoryView: React.FC = () => {
         }
       });
 
-      // Get the current card and its entries
+      // Get the visible card (the one currently on top)
       const visibleCardIndex = cards.length - 1 - [...gone].length;
       const visibleCard = cards[visibleCardIndex];
-      console.log('Setting up Matter.js with visible card:', visibleCard); // Debug log
-      console.log('Visible card entries:', visibleCard.entries); // Debug log
+      console.log('Visible card:', visibleCard);
       
       // Calculate card dimensions
       const cardWidth = visibleCard.is_horizontal ? 675 : 281.25;
       const cardHeight = 506.25;
       
-      // Position entries to the right of the card
+      // Create new bodies for each entry of the visible card
       rectanglesRef.current = visibleCard.entries.map((entry, i) => {
         const width = 280 + Math.random() * 40;
         const height = 160 + Math.random() * 40;
         const body = Bodies.rectangle(
-          window.innerWidth / 2 + cardWidth / 2 + 50, // Position to the right of the card
-          window.innerHeight / 2 - (visibleCard.entries.length * height) / 2 + i * height, // Stack vertically
+          window.innerWidth / 2 + cardWidth / 2 + 50,
+          window.innerHeight / 2 - (visibleCard.entries.length * height) / 2 + i * height,
           width,
           height,
           {
@@ -370,7 +404,7 @@ const StoryView: React.FC = () => {
           }
         ) as MatterBody;
         (body as any).entry = { text: entry.entry_text };
-        console.log('Created body with entry:', entry.entry_text); // Debug log
+        console.log('Created body with entry:', entry.entry_text);
         return body;
       });
 
@@ -423,7 +457,7 @@ const StoryView: React.FC = () => {
     };
 
     setupMatterJs();
-  }, [cards, currentCardIndex]);
+  }, [cards, currentCardIndex, hasAccess]);
 
   const resetCycleTimer = () => {
     if (cycleTimerRef.current) {
@@ -443,72 +477,6 @@ const StoryView: React.FC = () => {
     };
   }, []);
 
-  // Modify the swipeCard function to update entries correctly
-  const swipeCard = (direction: number) => {
-    if (isAnimating || cards.length === 0) return;
-    
-    // Add cooldown check (150ms between swipes)
-    const now = Date.now();
-    if (now - lastSwipeTime.current < 150) return;
-    lastSwipeTime.current = now;
-    
-    const topCardIndex = cards.length - 1 - [...gone].length;
-    setIsAnimating(true);
-    gone.add(topCardIndex);
-    
-    // Update current card index
-    const nextCardIndex = (currentCardIndex + 1) % cards.length;
-    setCurrentCardIndex(nextCardIndex);
-    
-    // Update Matter.js bodies with new entries from the current card
-    if (rectanglesRef.current) {
-      const currentCard = cards[nextCardIndex];
-      console.log('Current card:', currentCard); // Debug log
-      // Reverse entries when updating them
-      const entries = [...currentCard.entries].reverse();
-      console.log('Reversed entries for display:', entries); // Debug log
-      rectanglesRef.current.forEach((rect, i) => {
-        if (entries[i]) {
-          (rect as any).entry = { text: entries[i].entry_text };
-        }
-      });
-    }
-    
-    api.start(i => {
-      if (topCardIndex !== i) return;
-      const x = (200 + window.innerWidth) * direction;
-      const rot = direction * 10;
-      
-      return {
-        x,
-        rot,
-        scale: 1,
-        delay: undefined,
-        config: { friction: 50, tension: 200 },
-        onRest: () => {
-          setIsAnimating(false);
-          if (gone.size === cards.length) {
-            gone.clear();
-            api.start(i => to(i));
-          }
-        }
-      };
-    });
-  };
-
-  // Modify the keyboard event listener
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowRight' && !isAnimating) {
-        event.preventDefault(); // Prevent any default behavior
-        swipeCard(1);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isAnimating, cards.length, currentCardIndex]); // Add necessary dependencies
-
   // Move these to the component body instead of the useEffect dependencies
   useEffect(() => {
     if (isAnimating) {
@@ -519,6 +487,17 @@ const StoryView: React.FC = () => {
     }
   }, [isAnimating]);
 
+  const handleStartOver = () => {
+    setAllCardsSwiped(false);
+    setCurrentCardIndex(0);
+    gone.clear();
+    api.start(i => to(i));
+  };
+
+  if (!hasAccess) {
+    return <IntroPage onAccessGranted={() => setHasAccess(true)} />;
+  }
+
   if (cards.length === 0) return null;
 
   return (
@@ -527,7 +506,6 @@ const StoryView: React.FC = () => {
       
       <div className="w-full h-full absolute inset-0 z-20">
         {props.map(({ x, y, rot, scale }, i) => {
-         
           return (
             <animated.div 
               key={i} 
@@ -541,7 +519,7 @@ const StoryView: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                overflow: 'visible'
+                overflow: 'visible', 
               }}
             >
               <div style={{ position: 'relative' }}>
@@ -620,6 +598,36 @@ const StoryView: React.FC = () => {
         })}
       </div>
 
+      {/* Add CommentInput below the cards */}
+      <div className="absolute bottom-8 left-0 right-0 z-20">
+        {cards.length > 0 && !allCardsSwiped && (
+          <CommentInput 
+            cardId={cards[cards.length - 1 - [...gone].length].card_id} 
+            isSubmitting={isAnimating}
+            onSubmitSuccess={() => {
+              // Optionally refresh the entries or show a success message
+              console.log('Comment submitted successfully');
+            }}
+          />
+        )}
+      </div>
+
+      {/* Add Start Over button */}
+      {allCardsSwiped && (
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          onClick={handleStartOver}
+          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30
+                   bg-white/20 hover:bg-white/30 text-white font-papyrus py-3 px-6 rounded-lg
+                   backdrop-blur-sm border border-white/30 transition-all duration-300
+                   shadow-lg hover:shadow-xl"
+        >
+          Start Over
+        </motion.button>
+      )}
+
       <div className="absolute inset-0 z-30 pointer-events-none">
         {rectangleStates.map((rect, index) => (
           <Entry
@@ -649,4 +657,4 @@ const from = (_i: number) => ({ x: 0, rot: 0, scale: 1.5, y: -1000 });
 const trans = (r: number, s: number) =>
   `perspective(1000px) rotateX(5deg) rotateY(${r / 20}deg) rotateZ(${r}deg) scale(${s})`;
 
-export default StoryView; 
+export default StoryView;
