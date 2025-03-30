@@ -1,4 +1,4 @@
-.collective-container {
+.story-container {
     width: 100vw;
     height: 100vh;
     background-size: cover;
@@ -14,7 +14,7 @@
     scrollbar-width: none;
 }
 
-.collective-container::-webkit-scrollbar {
+.story-container::-webkit-scrollbar {
     display: none;
 }
 

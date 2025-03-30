@@ -9,7 +9,7 @@ import InputControls from './components/InputControls';
 import './components/InputControls.css';
 import flyButton from './assets/fly on button.png';
 import { Routes, Route, Link } from 'react-router-dom';
-import CollectiveView from './components/CollectiveView.tsx';
+import StoryView from './components/StoryView.tsx';
 import { API_ENDPOINTS } from './config';
 import { logApiCall } from './utils/apiLogger';
 
@@ -125,71 +125,11 @@ function App() {
 
   return (
     <div 
-            className="app-container" 
-            style={{ backgroundImage: `url(${backgroundImage})` }}
-          >
+      className="app-container" 
+      style={{ backgroundImage: `url(${backgroundImage})` }}
+    >
       <Routes>
-        <Route path="/" element={
-          
-            <>
-            {/* Left Half - Question and Input */}
-            <div className="left-half">
-              <div className="title-section">
-                <ShaderText text="what do you see?" className="title" />
-              </div>
-
-              <div className="input-section">
-                <ToastContainer />
-
-                <textarea
-                  className="input-textarea"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={handleKeyPress}
-                  placeholder="i see ..."
-                  style={{
-                    fontSize: `${inputSettings.fontSize}px`,
-                    fontFamily: inputSettings.fontFamily,
-                    color: inputSettings.color,
-                    fontWeight: inputSettings.fontWeight
-                  }}
-                />
-
-                <button
-                  className="submit-button"
-                  onClick={handleSubmission}
-                >
-                  <img src={flyButton} alt="Submit" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Deck Section - Right Half */}
-            <div className="deck-section">
-              <div className="deck-container">
-                <Deck 
-                  ref={deckRef}
-                  onCardChange={handleCardChange} 
-                  onSwipeComplete={handleSwipeComplete}
-                />
-              </div>
-            </div>
-            
-            {showCollectiveButton && (
-              <Link 
-                to="/collective"
-                className="collective-button"
-              >
-                <img src={flyButton} alt="Take me to collective view" className="fly-button-image" />
-              </Link>
-            )}
-            
-            </>
-            
-        
-        } />
-        <Route path="/collective" element={<CollectiveView />} />
-
+        <Route path="/" element={<StoryView />} />
       </Routes>
     </div>
   );

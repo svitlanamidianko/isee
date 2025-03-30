@@ -7,5 +7,5 @@ export const API_ENDPOINTS = {
   cards: `${API_BASE_URL}/api/cards`,
   createUserEntry: `${API_BASE_URL}/api/createuserentry`,
   cardImage: (imagePath) => `${API_BASE_URL}/api/cards/${encodeURI(imagePath.split('/').pop() || '')}`,
-  collectiveView: `${API_BASE_URL}/api/collective-view`
+  storyView: `${API_BASE_URL}/api/story-view`
 }; 

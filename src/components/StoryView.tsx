@@ -4,7 +4,7 @@ import MatterAttractors from 'matter-attractors';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import './CollectiveView.css';
+import './StoryView.css';
 import debounce from 'lodash/debounce';
 import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import { logApiCall } from '../utils/apiLogger';
@@ -138,7 +138,7 @@ const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, cycleC
   );
 };
 
-const CollectiveView: React.FC = () => {
+const StoryView: React.FC = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [gone] = useState(() => new Set());
   const [isAnimating, setIsAnimating] = useState(false);
@@ -152,10 +152,13 @@ const CollectiveView: React.FC = () => {
   const [rectangleStates, setRectangleStates] = useState<RectangleState[]>([]);
   const rectanglesRef = useRef<MatterBody[]>([]);
 
+  // Add this ref to track the last swipe time
+  const lastSwipeTime = useRef(0);
+
   useEffect(() => {
-    const fetchCollectiveData = async () => {
+    const fetchStoryData = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.collectiveView);
+        const response = await fetch(API_ENDPOINTS.storyView);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -169,7 +172,7 @@ const CollectiveView: React.FC = () => {
       }
     };
 
-    fetchCollectiveData();
+    fetchStoryData();
   }, []);
 
   // Create springs AFTER we have cards
@@ -379,6 +382,78 @@ const CollectiveView: React.FC = () => {
     };
   }, []);
 
+  // Modify the swipeCard function to include timing check
+  const swipeCard = (direction: number) => {
+    if (isAnimating || cards.length === 0) return;
+    
+    // Add cooldown check (150ms between swipes)
+    const now = Date.now();
+    if (now - lastSwipeTime.current < 150) return;
+    lastSwipeTime.current = now;
+    
+    // Rest of the swipeCard function remains the same
+    const topCardIndex = cards.length - 1 - [...gone].length;
+    setIsAnimating(true);
+    gone.add(topCardIndex);
+    
+    // Update current card index
+    setCurrentCardIndex(prev => (prev + 1) % cards.length);
+    
+    // Update Matter.js bodies with new entries
+    if (rectanglesRef.current) {
+      const newEntries = cards[(currentCardIndex + 1) % cards.length].entries.map(entry => ({ entry_text: entry.entry_text }));
+      rectanglesRef.current.forEach((rect, i) => {
+        if (newEntries[i]) {
+          (rect as any).entry = { text: newEntries[i].entry_text };
+        }
+      });
+    }
+    
+    api.start(i => {
+      if (topCardIndex !== i) return;
+      const x = (200 + window.innerWidth) * direction;
+      const rot = direction * 10;
+      
+      return {
+        x,
+        rot,
+        scale: 1,
+        delay: undefined,
+        config: { friction: 50, tension: 200 },
+        onRest: () => {
+          setIsAnimating(false);
+          if (gone.size === cards.length) {
+            gone.clear();
+            api.start(i => to(i));
+          }
+        }
+      };
+    });
+  };
+
+  // Modify the keyboard event listener
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowRight') {
+        event.preventDefault(); // Prevent any default behavior
+        swipeCard(1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []); // Remove dependencies to prevent re-creation of listener
+
+  // Move these to the component body instead of the useEffect dependencies
+  useEffect(() => {
+    if (isAnimating) {
+      const timer = setTimeout(() => {
+        setIsAnimating(false);
+      }, 300); // Failsafe to prevent stuck state
+      return () => clearTimeout(timer);
+    }
+  }, [isAnimating]);
+
   if (cards.length === 0) return null;
 
   return (
@@ -389,7 +464,7 @@ const CollectiveView: React.FC = () => {
         {props.map(({ x, y, rot, scale }, i) => {
           console.log(`Card ${i}:`, {
             isHorizontal: cards[i].is_horizontal,
-            width: cards[i].is_horizontal ? '1200px' : '600px',
+            width: cards[i].is_horizontal ? '1200px' : '500px',
             url: cards[i].card_url
           });
           return (
@@ -413,7 +488,7 @@ const CollectiveView: React.FC = () => {
                 style={{
                   transform: interpolate([rot, scale], trans),
                   backgroundColor: 'white',
-                  width: cards[i].is_horizontal ? '1200px' : '600px',
+                  width: cards[i].is_horizontal ? '1200px' : '500px',
                   height: '900px',
                   borderRadius: '10px',
                   boxShadow: '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)',
@@ -479,4 +554,4 @@ const from = (_i: number) => ({ x: 0, rot: 0, scale: 1.5, y: -1000 });
 const trans = (r: number, s: number) =>
   `perspective(1000px) rotateX(5deg) rotateY(${r / 20}deg) rotateZ(${r}deg) scale(${s})`;
 
-export default CollectiveView; 
+export default StoryView; 
