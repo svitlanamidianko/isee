@@ -5,7 +5,7 @@ import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './CollectiveView.css';
-import { debounce } from 'lodash';
+import debounce from 'lodash/debounce';
 import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import { logApiCall } from '../utils/apiLogger';
 
@@ -20,6 +20,7 @@ interface Card {
   linkie: string;
   order: string;
   text: string;
+  is_horizontal: boolean;
 }
 
 interface EntryProps {
@@ -159,8 +160,9 @@ const CollectiveView: React.FC = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        // Sort cards by order field in descending order (highest to lowest)
+        console.log('API Response:', data);
         const sortedCards = data.cards.sort((a, b) => parseInt(b.order) - parseInt(a.order));
+        console.log('Sorted Cards:', sortedCards);
         setCards(sortedCards);
       } catch (error) {
         console.error('Error fetching cards:', error);
@@ -384,61 +386,68 @@ const CollectiveView: React.FC = () => {
       <div ref={sceneRef} className="w-full h-full absolute inset-0 z-10" />
       
       <div className="w-full h-full absolute inset-0 z-20">
-        {props.map(({ x, y, rot, scale }, i) => (
-          <animated.div 
-            key={i} 
-            style={{ 
-              x, 
-              y,
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              willChange: 'transform',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'visible'
-            }}
-          >
-            <animated.div
-              {...bind(i)}
-              style={{
-                transform: interpolate([rot, scale], trans),
-                backgroundColor: 'white',
-                width: '600px',
-                height: '900px',
-                borderRadius: '10px',
-                boxShadow: '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)',
-                overflow: 'hidden'
+        {props.map(({ x, y, rot, scale }, i) => {
+          console.log(`Card ${i}:`, {
+            isHorizontal: cards[i].is_horizontal,
+            width: cards[i].is_horizontal ? '1200px' : '600px',
+            url: cards[i].card_url
+          });
+          return (
+            <animated.div 
+              key={i} 
+              style={{ 
+                x, 
+                y,
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                willChange: 'transform',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'visible'
               }}
             >
-              {cards[i].card_url.match(/\.(mov|mp4)$/i) ? (
-                <video
-                  src={`${API_BASE_URL}${cards[i].card_url}`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                />
-              ) : (
-                <img
-                  src={`${API_BASE_URL}${cards[i].card_url}`}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  alt={cards[i].card_name}
-                />
-              )}
+              <animated.div
+                {...bind(i)}
+                style={{
+                  transform: interpolate([rot, scale], trans),
+                  backgroundColor: 'white',
+                  width: cards[i].is_horizontal ? '1200px' : '600px',
+                  height: '900px',
+                  borderRadius: '10px',
+                  boxShadow: '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)',
+                  overflow: 'hidden'
+                }}
+              >
+                {cards[i].card_url.match(/\.(mov|mp4)$/i) ? (
+                  <video
+                    src={`${API_BASE_URL}${cards[i].card_url}`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={`${API_BASE_URL}${cards[i].card_url}`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    alt={cards[i].card_name}
+                  />
+                )}
+              </animated.div>
             </animated.div>
-          </animated.div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="absolute inset-0 z-30 pointer-events-none">

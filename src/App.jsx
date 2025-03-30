@@ -9,7 +9,7 @@ import InputControls from './components/InputControls';
 import './components/InputControls.css';
 import flyButton from './assets/fly on button.png';
 import { Routes, Route, Link } from 'react-router-dom';
-import CollectiveView from './components/CollectiveView';
+import CollectiveView from './components/CollectiveView.tsx';
 import { API_ENDPOINTS } from './config';
 import { logApiCall } from './utils/apiLogger';
 
