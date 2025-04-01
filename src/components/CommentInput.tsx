@@ -63,10 +63,10 @@ const CommentInput: React.FC<CommentInputProps> = ({ cardId, onSubmitSuccess, is
           type="text"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder=""
-          className="w-full bg-transparent border-b border-white/20 
-                   text-white placeholder-white/30 focus:outline-none focus:border-white/40
-                   font-papyrus text-lg pb-1"
+          placeholder="What do you see? "
+          className="w-full lowercase bg-transparent border-b border-white/20 
+                   text-white font-medium placeholder-white/80 animate-[pulse_2s_ease-in-out_infinite] focus:outline-none focus:border-white/40
+                   font-papyrus text-4xl pb-6 text-center placeholder:text-center"
           disabled={isSubmitting}
         />
       </div>

@@ -84,18 +84,22 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
 
   return (
     <motion.div 
-      className="absolute left-0 right-0 bottom-full mb-6 text-center"
+      className="absolute text-center"
+      style={{ 
+        width: '120%',
+        left: '-10%',
+        bottom: 'calc(100% + 2.5rem)'
+      }}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
       {text && (
         <div 
-          className="text-white text-xl mb-3 font-medium"
+          className="text-white text-3xl leading-relaxed mb-3 font-medium"
           style={{ 
             fontFamily: 'Papyrus',
             textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
-            maxWidth: '80%',
             margin: '0 auto'
           }}
         >
@@ -107,11 +111,7 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
           href={linkie} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-300 text-sm hover:text-blue-200 transition-colors"
-          style={{ 
-            textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-            display: 'inline-block'
-          }}
+          className="text-blue-300 text-lg hover:text-blue-200 transition-colors inline-block drop-shadow-[0_2px_4px_rgba(76,29,149,0.5)]"
         >
           {linkie}
         </a>
@@ -673,7 +673,7 @@ const StoryView: React.FC = () => {
       </div>
 
       {/* Add CommentInput below the cards */}
-      <div className="absolute bottom-8 left-0 right-0 z-20">
+      <div className="absolute bottom-24 left-0 right-0 z-20">
         {cards.length > 0 && !allCardsSwiped && cards[cards.length - 1 - [...gone].length] && (
           <CommentInput 
             cardId={cards[cards.length - 1 - [...gone].length].card_id} 
