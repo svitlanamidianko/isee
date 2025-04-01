@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import Matter, { Bodies, World, Mouse, MouseConstraint } from 'matter-js';
+import Matter from 'matter-js';
 import MatterAttractors from 'matter-attractors';
+// @ts-ignore
+import MatterWrap from 'matter-wrap';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +13,12 @@ import { logApiCall } from '../utils/apiLogger';
 import CommentInput from './CommentInput';
 import IntroPage from './IntroPage';
 
+// Initialize Matter.js plugins
 Matter.use(MatterAttractors);
+Matter.use(MatterWrap);
+
+// Set the gravity constant for the attractors
+MatterAttractors.Attractors.gravityConstant = 0.0001;
 
 // Move interfaces to the top
 interface Card {
@@ -30,44 +37,50 @@ interface EntryProps {
   position: { x: number; y: number };
   dimensions: { width: number; height: number };
   index: number;
-  cycleCount: number;
+  opacity: number;
 }
 
 interface RectangleState {
   position: { x: number; y: number };
   dimensions: { width: number; height: number };
   entry: { text: string };
+  opacity: number;
+  initialDimensions?: { width: number; height: number };
 }
 
 interface MatterBody extends Matter.Body {
   entry?: { text: string };
+  fadeIn?: boolean;
+  initialDimensions?: { width: number; height: number };
 }
 
-const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, cycleCount }) => {
+const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, opacity }) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="absolute flex items-start p-6 backdrop-blur-xs rounded-xl"
+      animate={{ opacity }}
+      transition={{ duration: 0.5 }}
+      className="absolute flex items-start p-4 backdrop-blur-xl rounded-lg"
       style={{
-        left: position.x,
-        top: position.y,
+        left: position.x - dimensions.width / 2,
+        top: position.y - dimensions.height / 2,
         width: dimensions.width,
         height: dimensions.height,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
         border: '1px solid rgba(255, 255, 255, 0.05)',
+        cursor: 'grab',
+        pointerEvents: 'auto',
         fontFamily: 'Papyrus',
+        zIndex: 1000
       }}
     >
       <div 
-        className="flex-1 overflow-hidden text-left pb-8 pr-4 select-none"
+        className="flex-1 overflow-hidden text-left pb-4 pr-2 select-none"
         style={{
           fontWeight: 400,
           color: '#666666',
           textShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          fontSize: '24px',
+          fontSize: '18px',
           lineHeight: '1.4',
           letterSpacing: '0.02em'
         }}
@@ -86,9 +99,9 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
     <motion.div 
       className="absolute text-center"
       style={{ 
-        width: '120%',
-        left: '-10%',
-        bottom: 'calc(100% + 2.5rem)'
+        width: '200%',
+        left: '-50%',
+        bottom: 'calc(100% + 1.5rem)'
       }}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -111,7 +124,11 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
           href={linkie} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-300 text-lg hover:text-blue-200 transition-colors inline-block drop-shadow-[0_2px_4px_rgba(76,29,149,0.5)]"
+          className="text-blue-300 text-sm hover:text-blue-200 transition-colors"
+          style={{ 
+            textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+            display: 'inline-block'
+          }}
         >
           {linkie}
         </a>
@@ -156,15 +173,16 @@ const StoryView: React.FC = () => {
   
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [cycleCount, setCycleCount] = useState(0);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const [allCardsSwiped, setAllCardsSwiped] = useState(false);
-  const cycleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
 
   // Matter.js refs and state
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
+  const renderRef = useRef<Matter.Render | null>(null);
+  const runnerRef = useRef<Matter.Runner | null>(null);
+  const attractorRef = useRef<Matter.Body | null>(null);
   const [rectangleStates, setRectangleStates] = useState<RectangleState[]>([]);
   const rectanglesRef = useRef<MatterBody[]>([]);
 
@@ -217,6 +235,14 @@ const StoryView: React.FC = () => {
       }
     }
     
+    // Update attractor position if it exists
+    if (active && attractorRef.current) {
+      Matter.Body.setPosition(attractorRef.current, {
+        x: window.innerWidth / 2 + mx,
+        y: window.innerHeight / 2
+      });
+    }
+    
     const trigger = Math.abs(mx) > 100 || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > 0.2;
     const dir = xDir < 0 ? -1 : 1;
     
@@ -250,6 +276,266 @@ const StoryView: React.FC = () => {
     return index - (cards.length - goneCount - 1);
   }, [gone, cards.length]);
 
+  // Function to calculate dimensions based on text length
+  const calculateDimensions = useCallback((text: string) => {
+    // Set fixed width for all cards
+    const constantWidth = 160;
+    
+    // Typography constants
+    const fontSize = 18;
+    const lineHeight = fontSize * 1.4; // Standard line height ratio
+    const avgCharsPerLine = constantWidth / (fontSize * 0.5); // Approximate chars that fit per line
+    
+    // Estimate the number of lines (accounting for word wrapping)
+    // Split text into words and reconstruct line by line
+    const words = text.split(' ');
+    let lines = 1;
+    let currentLineLength = 0;
+    
+    words.forEach(word => {
+      // Add word length plus one space
+      if (currentLineLength + word.length + 1 <= avgCharsPerLine) {
+        currentLineLength += word.length + 1;
+      } else {
+        // Start new line
+        lines++;
+        currentLineLength = word.length;
+      }
+    });
+    
+    // Calculate height based on lines needed
+    const textHeight = Math.ceil(lines * lineHeight);
+    
+    // Add padding for container (top+bottom padding from CSS)
+    const paddingVertical = 36; // 12px top + 12px bottom
+    const minHeight = 60; // Minimum height to look good
+    
+    // Calculate final height with some variation for natural feel
+    const variation = (Math.random() * 10) + 10; // +/- 5px variation
+    const calculatedHeight = Math.max(minHeight, textHeight + paddingVertical + variation);
+    
+    return {
+      width: constantWidth,
+      height: Math.floor(calculatedHeight)
+    };
+  }, []);
+
+  // Function to set up Matter.js physics
+  const setupPhysics = useCallback(() => {
+    if (!sceneRef.current || !cards.length) return;
+    
+    // Clear any existing physics engine
+    if (engineRef.current) {
+      if (runnerRef.current) Matter.Runner.stop(runnerRef.current);
+      if (renderRef.current) Matter.Render.stop(renderRef.current);
+      Matter.Engine.clear(engineRef.current);
+      engineRef.current = null;
+    }
+    
+    // Get the current visible card
+    const topCardIndex = cards.length - 1 - [...gone].length;
+    const currentCard = cards[topCardIndex];
+    if (!currentCard || !currentCard.entries || currentCard.entries.length === 0) return;
+    
+    // Create engine
+    const engine = Matter.Engine.create({
+      enableSleeping: false,
+      constraintIterations: 4
+    });
+    engineRef.current = engine;
+    
+    // Remove gravity
+    engine.world.gravity.y = 0;
+    
+    // Create renderer - this is crucial for mouse events
+    const render = Matter.Render.create({
+      element: sceneRef.current,
+      engine: engine,
+      options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        wireframes: false,
+        background: 'transparent'
+      }
+    });
+    renderRef.current = render;
+    
+    // Create attractor at center of screen
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    
+    // Create an invisible attractor body
+    const attractor = Matter.Bodies.circle(centerX, centerY, 10, {
+      isStatic: true,
+      render: { visible: true },
+      plugin: {
+        attractors: [
+          function(bodyA, bodyB) {
+            return {
+              x: (bodyA.position.x - bodyB.position.x) * -0.000000005,
+              y: (bodyA.position.y - bodyB.position.y) * -0.000000005,
+            };
+          }
+        ]
+      }
+    });
+    attractorRef.current = attractor;
+    
+    // Add very gentle gravity in x and y direction
+    engine.gravity.x = 0.005;
+    engine.gravity.y = 0.005;
+    
+    // Create bodies for entries
+    const entryBodies = currentCard.entries.map((entry, i) => {
+      // Calculate dimensions based on text length
+      const dimensions = calculateDimensions(entry.entry_text);
+      
+      // Random position across the entire screen
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
+      
+      // Create body with physics properties
+      const body = Matter.Bodies.rectangle(x, y, dimensions.width, dimensions.height, {
+        frictionAir: 0.01,
+        friction: 0.1,
+        restitution: 0.3,
+        density: 0.001,
+        chamfer: { radius: 12 },
+        render: { 
+          fillStyle: 'transparent', 
+          lineWidth: 0 
+        },
+        plugin: {
+          wrap: {
+            min: { x: 0, y: 0 }, // Extend wrap bounds for smoother transitions
+            max: { x: window.innerWidth, y: window.innerHeight }
+          }
+        }
+      }) as MatterBody;
+      
+      // Add entry text and dimensions to body
+      body.entry = { text: entry.entry_text };
+      body.initialDimensions = dimensions;
+      body.fadeIn = true;
+      
+      // Give it a small initial push in random direction
+      const angle = Math.random() * Math.PI * 2;
+      const magnitude = 0.00005 + Math.random() * 0.0001;
+      Matter.Body.applyForce(body, body.position, {
+        x: Math.cos(angle) * magnitude,
+        y: Math.sin(angle) * magnitude
+      });
+      
+      return body;
+    });
+    
+    rectanglesRef.current = entryBodies;
+    
+    // 1. Create mouse on the render canvas (this is critical)
+    const mouse = Matter.Mouse.create(render.canvas);
+    
+    // 2. Create the mouse constraint with proper parameters
+    const mouseConstraint = Matter.MouseConstraint.create(engine, {
+      mouse: mouse,
+      constraint: {
+        stiffness: 0.05,  // Softer connection for smoother dragging
+        damping: 0.1,     // Some damping for natural movement
+        render: {
+          visible: true,  // Show the constraint line when dragging
+          lineWidth: 1,
+          strokeStyle: 'rgba(255,255,255,0.3)'
+        }
+      }
+    });
+    
+    // 3. Scale mouse for high DPI displays
+    mouse.pixelRatio = window.devicePixelRatio || 1;
+    
+    // 4. CRITICAL - set the render's mouse property
+    render.mouse = mouse;
+    
+    // 5. Add debugging/logging for mouse events
+    Matter.Events.on(mouseConstraint, 'startdrag', (event) => {
+      console.log('Started dragging body', event.body);
+    });
+    
+    Matter.Events.on(mouseConstraint, 'enddrag', (event) => {
+      console.log('Stopped dragging body', event.body);
+    });
+    
+    // 6. Add all bodies to world - include mouseConstraint here
+    Matter.World.add(engine.world, [
+      attractor,
+      ...entryBodies,
+      mouseConstraint // Add the mouse constraint to the world
+    ]);
+    
+    // 7. Start both the runner AND renderer
+    Matter.Runner.run(Matter.Runner.create(), engine);
+    Matter.Render.run(render);  // This is essential for mouse events
+    runnerRef.current = engine.runner;
+    
+    // 8. Limit maximum velocity (keep your existing code)
+    Matter.Events.on(engine, 'beforeUpdate', () => {
+      const maxVelocity = 2;
+      
+      entryBodies.forEach(body => {
+        const velocity = Matter.Vector.magnitude(body.velocity);
+        if (velocity > maxVelocity) {
+          const factor = maxVelocity / velocity;
+          Matter.Body.setVelocity(body, {
+            x: body.velocity.x * factor,
+            y: body.velocity.y * factor
+          });
+        }
+      });
+    });
+    
+    // Update body positions in state (keep your existing code)
+    let fadeOpacity = 0;
+    let fadeTimer: NodeJS.Timeout | null = null;
+    
+    fadeTimer = setInterval(() => {
+      fadeOpacity += 0.05;
+      if (fadeOpacity >= 1) {
+        fadeOpacity = 1;
+        if (fadeTimer) clearInterval(fadeTimer);
+      }
+    }, 100);
+    
+    Matter.Events.on(engine, 'afterUpdate', () => {
+      if (!rectanglesRef.current.length) return;
+      
+      setRectangleStates(
+        rectanglesRef.current.map(rect => ({
+          position: rect.position,
+          dimensions: rect.initialDimensions || {
+            width: rect.bounds.max.x - rect.bounds.min.x - 20,
+            height: rect.bounds.max.y - rect.bounds.min.y - 20
+          },
+          entry: rect.entry || { text: '' },
+          opacity: fadeOpacity,
+          initialDimensions: rect.initialDimensions
+        }))
+      );
+    });
+    
+  }, [cards, gone, calculateDimensions]);
+  
+  // Initialize physics when cards are loaded
+  useEffect(() => {
+    if (cards.length > 0 && !isAnimating) {
+      setupPhysics();
+    }
+    
+    return () => {
+      // Cleanup physics engine
+      if (runnerRef.current) Matter.Runner.stop(runnerRef.current);
+      if (renderRef.current) Matter.Render.stop(renderRef.current);
+      if (engineRef.current) Matter.Engine.clear(engineRef.current);
+    };
+  }, [cards, isAnimating, setupPhysics]);
+
   // Memoize the swipeCard function
   const swipeCard = useCallback((direction: number) => {
     console.log('swipeCard called with direction:', direction);
@@ -278,6 +564,14 @@ const StoryView: React.FC = () => {
     }
     
     console.log('Swiping card at index:', topCardIndex);
+    
+    // Clear existing physics entries immediately
+    setRectangleStates([]);
+    if (engineRef.current) {
+      if (runnerRef.current) Matter.Runner.stop(runnerRef.current);
+      if (renderRef.current) Matter.Render.stop(renderRef.current);
+      Matter.World.clear(engineRef.current.world, true);
+    }
     
     setIsAnimating(true);
     gone.add(topCardIndex);
@@ -317,61 +611,20 @@ const StoryView: React.FC = () => {
           console.log('Animation completed');
           setIsAnimating(false);
           
-          // Update the Matter.js bodies
-          if (engineRef.current && cards[nextCardIndex]) {
-            const currentCard = cards[nextCardIndex];
-            console.log('Setting up new entries for card:', currentCard);
-            
-            // Create new bodies for each entry
-            if (currentCard && currentCard.entries) {
-              const newBodies = currentCard.entries.map((entry, i) => {
-                const width = 280 + Math.random() * 40;
-                const height = 160 + Math.random() * 40;
-                const body = Bodies.rectangle(
-                  100,
-                  100 + (i * (height + 20)),
-                  width,
-                  height,
-                  {
-                    frictionAir: 0,
-                    friction: 0,
-                    restitution: 0,
-                    inertia: Infinity,
-                    density: 0,
-                    chamfer: { radius: 12 },
-                    render: { fillStyle: 'transparent', lineWidth: 0 },
-                    isStatic: true
-                  }
-                ) as MatterBody;
-                (body as any).entry = { text: entry.entry_text };
-                console.log('Created new entry after swipe:', entry.entry_text);
-                return body;
-              });
-              
-              rectanglesRef.current = newBodies;
-
-              // Update the world with new bodies
-              if (engineRef.current) {
-                World.clear(engineRef.current.world, true);
-                World.add(engineRef.current.world, newBodies);
-              }
-            }
-          }
-
           // Check if we've gone through all cards
           if (gone.size === cards.length) {
             setAllCardsSwiped(true);
-            // Clear rectangle states when all cards are swiped
-            setRectangleStates([]);
-            // Clear the Matter.js world
-            if (engineRef.current) {
-              World.clear(engineRef.current.world, true);
-            }
+          } else {
+            // Set up new physics for next card after a small delay
+            // Only do this once animation is complete
+            setTimeout(() => {
+              setupPhysics();
+            }, 300);
           }
         }
       };
     });
-  }, [isAnimating, cards, currentCardIndex, gone, api, getRelativePosition]);
+  }, [isAnimating, cards, currentCardIndex, gone, api, getRelativePosition, setupPhysics]);
 
   // Modify the keyboard event listener
   useEffect(() => {
@@ -401,139 +654,38 @@ const StoryView: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isAnimating, cards.length, gone, swipeCard]);
 
-  // Setup Matter.js physics
+  // Handle window resize
   useEffect(() => {
-    if (!hasAccess || !cards.length || !sceneRef.current) return;
-
-    let render: Matter.Render | null = null;
-    let runner: Matter.Runner | null = null;
-
-    const setupMatterJs = () => {
-      const { Engine, Render, World, Bodies, Mouse, MouseConstraint, Runner } = Matter;
-
-      // Create engine
-      engineRef.current = Engine.create({
-        enableSleeping: false,
-        constraintIterations: 4
-      });
-
-      // Create renderer
-      render = Render.create({
-        element: sceneRef.current as HTMLElement,
-        engine: engineRef.current,
-        options: {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          wireframes: false,
-          background: 'transparent'
-        }
-      });
-
-      // Get the visible card
-      const visibleCardIndex = cards.length - 1 - [...gone].length;
-      const visibleCard = cards[visibleCardIndex];
-      console.log('Initial setup - Visible card index:', visibleCardIndex);
-      console.log('Initial setup - Visible card:', visibleCard);
-      
-      if (!visibleCard || !render.canvas) return;
-
-      // Calculate card dimensions
-      const cardWidth = visibleCard.is_horizontal ? 675 : 281.25;
-      
-      // Create new bodies for each entry
-      rectanglesRef.current = visibleCard.entries.map((entry, i) => {
-        const width = 280 + Math.random() * 40;
-        const height = 160 + Math.random() * 40;
-        const body = Bodies.rectangle(
-          100,
-          100 + (i * (height + 20)),
-          width,
-          height,
-          {
-            frictionAir: 0,
-            friction: 0,
-            restitution: 0,
-            inertia: Infinity,
-            density: 0,
-            chamfer: { radius: 12 },
-            render: { fillStyle: 'transparent', lineWidth: 0 },
-            isStatic: true
+    const handleResize = debounce(() => {
+      if (engineRef.current && attractorRef.current) {
+        // Update the wrap bounds
+        rectanglesRef.current.forEach(body => {
+          if (body.plugin && body.plugin.wrap) {
+            body.plugin.wrap.max = { 
+              x: window.innerWidth, 
+              y: window.innerHeight 
+            };
           }
-        ) as MatterBody;
-        (body as any).entry = { text: entry.entry_text };
-        console.log('Initial setup - Created entry:', entry.entry_text);
-        return body;
-      });
-
-      // Add all bodies to world
-      World.add(engineRef.current.world, [
-        ...rectanglesRef.current
-      ]);
-
-      // Start engine and renderer
-      runner = Runner.create();
-      Runner.run(runner, engineRef.current);
-      Render.run(render);
-
-      // Update states
-      Matter.Events.on(engineRef.current, 'afterUpdate', () => {
-        if (!rectanglesRef.current.length) return;
+        });
         
-        setRectangleStates(
-          rectanglesRef.current.map(rect => ({
-            position: rect.position,
-            dimensions: {
-              width: rect.bounds.max.x - rect.bounds.min.x - 20,
-              height: rect.bounds.max.y - rect.bounds.min.y - 20
-            },
-            entry: (rect as any).entry || { text: '' }
-          }))
-        );
-      });
-    };
-
-    setupMatterJs();
-
-    // Cleanup function
-    return () => {
-      if (runner) {
-        Matter.Runner.stop(runner);
+        // Update attractor position
+        Matter.Body.setPosition(attractorRef.current, {
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2
+        });
       }
-      if (render) {
-        Matter.Render.stop(render);
-        render.canvas?.remove();
-      }
-      if (engineRef.current) {
-        Matter.World.clear(engineRef.current.world, true);
-        Matter.Engine.clear(engineRef.current);
-      }
-    };
-  }, [cards, currentCardIndex, hasAccess, gone]);
-
-  const resetCycleTimer = () => {
-    if (cycleTimerRef.current) {
-      clearInterval(cycleTimerRef.current);
-    }
-    cycleTimerRef.current = setInterval(() => {
-      setCycleCount(c => c + 1);
-    }, 15000);
-  };
-
-  useEffect(() => {
-    resetCycleTimer();
-    return () => {
-      if (cycleTimerRef.current) {
-        clearInterval(cycleTimerRef.current);
-      }
-    };
+    }, 250);
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Move these to the component body instead of the useEffect dependencies
+  // Failsafe to prevent stuck state
   useEffect(() => {
     if (isAnimating) {
       const timer = setTimeout(() => {
         setIsAnimating(false);
-      }, 300); // Failsafe to prevent stuck state
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [isAnimating]);
@@ -560,6 +712,11 @@ const StoryView: React.FC = () => {
         }
       };
     });
+    
+    // Set up physics again for the first card
+    setTimeout(() => {
+      setupPhysics();
+    }, 500);
   };
 
   // Prevent default drag behavior
@@ -576,7 +733,14 @@ const StoryView: React.FC = () => {
 
   return (
     <div className="fixed inset-0 w-full h-full">
-      <div ref={sceneRef} className="w-full h-full absolute inset-0 z-10" />
+      <div 
+        ref={sceneRef} 
+        className="w-full h-full absolute inset-0 z-10 pointer-events-auto" 
+        style={{
+          pointerEvents: 'auto'
+        }}
+        
+      />
       
       <div className="w-full h-full absolute inset-0 z-20">
         {props.map(({ x, y, rot, scale }, i) => {
@@ -717,12 +881,12 @@ const StoryView: React.FC = () => {
         <div className="absolute inset-0 z-30 pointer-events-none">
           {rectangleStates.map((rect, index) => (
             <Entry
-              key={`entry-${index}-${cycleCount}-${currentCardIndex}`}
+              key={`entry-${index}-${currentCardIndex}`}
               text={rect.entry.text}
               position={rect.position}
               dimensions={rect.dimensions}
               index={index}
-              cycleCount={cycleCount}
+              opacity={rect.opacity}
             />
           ))}
         </div>
