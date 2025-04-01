@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Matter, { Bodies, World, Mouse, MouseConstraint } from 'matter-js';
 import MatterAttractors from 'matter-attractors';
 import { useSprings, animated, to as interpolate } from '@react-spring/web';
@@ -44,82 +44,36 @@ interface MatterBody extends Matter.Body {
 }
 
 const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, cycleCount }) => {
-  const entryRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
-  const [fontSize, setFontSize] = useState(24);
-  const [isHovered, setIsHovered] = useState(false);
-
-  useEffect(() => {
-    const fitText = () => {
-      if (!textRef.current) return;
-      
-      const container = textRef.current;
-      const maxWidth = dimensions.width - 40;
-      const maxHeight = dimensions.height - 40;
-      
-      let size = 32;
-      container.style.fontSize = `${size}px`;
-      
-      while (size > 12) {
-        if (container.scrollHeight <= maxHeight && container.scrollWidth <= maxWidth) {
-          break;
-        }
-        size = Math.floor(size * 0.9);
-        container.style.fontSize = `${size}px`;
-      }
-      
-      const lineHeight = Math.max(1.1, Math.min(1.4, 1.25 + (24 - size) * 0.01));
-      const letterSpacing = Math.max(-0.02, Math.min(0.05, (24 - size) * 0.002));
-      
-      setFontSize(size);
-      container.style.lineHeight = lineHeight.toString();
-      container.style.letterSpacing = `${letterSpacing}em`;
-    };
-
-    fitText();
-  }, [dimensions, text]);
-
   return (
     <motion.div
-      ref={entryRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
       className="absolute flex items-start p-6 backdrop-blur-xs rounded-xl"
-      initial={{ scale: 0, opacity: 0, y: 50 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.5,
-        delay: index * 0.2,
-        type: "spring",
-        stiffness: 10,
-        damping: 6
-      }}
       style={{
-        left: position.x - dimensions.width / 2,
-        top: position.y - dimensions.height / 2,
+        left: position.x,
+        top: position.y,
         width: dimensions.width,
         height: dimensions.height,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
         backdropFilter: 'blur(8px)',
         border: '1px solid rgba(255, 255, 255, 0.05)',
-        cursor: 'move',
         fontFamily: 'Papyrus',
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      <motion.div 
-        ref={textRef}
+      <div 
         className="flex-1 overflow-hidden text-left pb-8 pr-4 select-none"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0, fontSize }}
-        transition={{ duration: 1.5, delay: index * 0.3 }}
         style={{
           fontWeight: 400,
           color: '#666666',
-          textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          fontSize: '24px',
+          lineHeight: '1.4',
+          letterSpacing: '0.02em'
         }}
       >
         {text}
-      </motion.div>
+      </div>
     </motion.div>
   );
 };
@@ -166,16 +120,47 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
   );
 };
 
+// Helper functions
+const from = (_i: number) => ({ x: 0, rot: 0, scale: 1.5, y: -1000 });
+
+const trans = (r: number, s: number) =>
+  `perspective(1000px) rotateX(5deg) rotateY(${r / 20}deg) rotateZ(${r}deg) scale(${s})`;
+
+// Create a function that generates the 'to' function with access to cards
+const createToFunction = (cards: Card[]) => (i: number) => {
+  if (!cards.length) return { x: 0, y: 0, scale: 1, rot: 0, delay: 0 };
+  
+  // In the deck, cards[0] is the bottom card, cards[cards.length-1] is the top card
+  // Calculate position from the top of the deck 
+  const topPos = cards.length - 1;
+  // Apply non-linear scaling
+  // Top card (highest index) has scale 1
+  // Second card has scale 0.5
+  // Each subsequent card scales down by 0.05
+  const scale = i === topPos ? 1 : i === topPos - 1 ? 0.5 : Math.max(0.2, 0.5 - (topPos - i - 1) * 0.05);
+  
+  return {
+    x: 0,
+    y: i * -8,
+    scale,
+    rot: -10 + Math.random() * 20,
+    delay: i * 100,
+  };
+};
+
 const StoryView: React.FC = () => {
-  const [hasAccess, setHasAccess] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
+
   const [cards, setCards] = useState<Card[]>([]);
   const [gone] = useState(() => new Set());
+  
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [cycleCount, setCycleCount] = useState(0);
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const [allCardsSwiped, setAllCardsSwiped] = useState(false);
   const cycleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
 
   // Matter.js refs and state
   const sceneRef = useRef<HTMLDivElement>(null);
@@ -207,6 +192,9 @@ const StoryView: React.FC = () => {
     fetchStoryData();
   }, []);
 
+  // Create the to function with access to cards
+  const to = useMemo(() => createToFunction(cards), [cards]);
+
   // Create springs AFTER we have cards
   const [props, api] = useSprings(cards.length, i => ({
     ...to(i),
@@ -216,13 +204,51 @@ const StoryView: React.FC = () => {
   // Add the bind function from useDrag
   const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity }) => {
     if (isAnimating) return;
+    
+    // Get the current card being dragged
+    const currentCardIndex = cards.length - 1 - [...gone].length;
+    if (index !== currentCardIndex) return;
+    
+    // If drag just started, pause video if applicable
+    if (active && cards[index]?.card_url.match(/\.(mov|mp4)$/i)) {
+      const videoRef = videoRefs.current[cards[index].card_id];
+      if (videoRef && !videoRef.paused) {
+        videoRef.pause();
+      }
+    }
+    
     const trigger = Math.abs(mx) > 100 || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > 0.2;
     const dir = xDir < 0 ? -1 : 1;
+    
+    // Update card position during drag
+    api.start(i => {
+      if (index !== i) return;
+      
+      // Calculate rotation based on movement
+      const rot = mx / 100 + (dir * 2 * Math.sign(mx));
+      
+      return {
+        x: active ? mx : 0,
+        rot: active ? rot : 0,
+        scale: 1,
+        config: { friction: active ? 50 : 40, tension: active ? 300 : 500 }
+      };
+    });
     
     if (!active && trigger) {
       swipeCard(dir);
     }
   });
+
+  // Calculate the relative position of a card in the deck considering swiped cards
+  const getRelativePosition = useCallback((index: number): number => {
+    // How many cards have been swiped away
+    const goneCount = gone.size;
+    // If this card has been swiped, it's no longer in the deck
+    if (gone.has(index)) return -1;
+    // Return the position from the top of the visible deck (0 is top)
+    return index - (cards.length - goneCount - 1);
+  }, [gone, cards.length]);
 
   // Memoize the swipeCard function
   const swipeCard = useCallback((direction: number) => {
@@ -240,19 +266,43 @@ const StoryView: React.FC = () => {
     }
     lastSwipeTime.current = now;
     
+    // Stop video if it's playing
     const topCardIndex = cards.length - 1 - [...gone].length;
+    const currentCard = cards[topCardIndex];
+    if (currentCard && currentCard.card_url.match(/\.(mov|mp4)$/i)) {
+      const videoRef = videoRefs.current[currentCard.card_id];
+      if (videoRef) {
+        videoRef.pause();
+        videoRef.currentTime = 0;
+      }
+    }
+    
     console.log('Swiping card at index:', topCardIndex);
     
     setIsAnimating(true);
     gone.add(topCardIndex);
     
     // Update current card index
-    const nextCardIndex = (currentCardIndex + 1) % cards.length;
+    const nextCardIndex = topCardIndex - 1;
+    console.log('Next card index will be:', nextCardIndex);
     setCurrentCardIndex(nextCardIndex);
     
     // First trigger the card animation
     api.start(i => {
-      if (topCardIndex !== i) return;
+      if (topCardIndex !== i) {
+        // Update scales for all cards that are not being swiped
+        const relPos = getRelativePosition(i);
+        if (relPos >= 0) {
+          return {
+            x: 0,
+            y: relPos * -8,
+            scale: relPos === 0 ? 1 : relPos === 1 ? 0.5 : Math.max(0.2, 0.5 - (relPos - 1) * 0.05),
+            rot: -10 + Math.random() * 20,
+            config: { friction: 50, tension: 200 },
+          };
+        }
+        return;
+      }
       
       const x = (200 + window.innerWidth) * direction;
       const rot = direction * 10;
@@ -267,60 +317,61 @@ const StoryView: React.FC = () => {
           console.log('Animation completed');
           setIsAnimating(false);
           
-          // After card animation completes, update Matter.js bodies
-          if (engineRef.current) {
+          // Update the Matter.js bodies
+          if (engineRef.current && cards[nextCardIndex]) {
             const currentCard = cards[nextCardIndex];
             console.log('Setting up new entries for card:', currentCard);
             
             // Create new bodies for each entry
-            rectanglesRef.current = currentCard.entries.map((entry, i) => {
-              const width = 280 + Math.random() * 40;
-              const height = 160 + Math.random() * 40;
-              const body = Bodies.rectangle(
-                window.innerWidth / 2 + (currentCard.is_horizontal ? 675 : 281.25) / 2 + 50,
-                window.innerHeight / 2 - (currentCard.entries.length * height) / 2 + i * height,
-                width,
-                height,
-                {
-                  frictionAir: 0,
-                  friction: 0,
-                  restitution: 0,
-                  inertia: Infinity,
-                  density: 0,
-                  chamfer: { radius: 12 },
-                  render: { fillStyle: 'transparent', lineWidth: 0 }
-                }
-              ) as MatterBody;
-              (body as any).entry = { text: entry.entry_text };
-              console.log('Created body with entry:', entry.entry_text);
-              return body;
-            });
+            if (currentCard && currentCard.entries) {
+              const newBodies = currentCard.entries.map((entry, i) => {
+                const width = 280 + Math.random() * 40;
+                const height = 160 + Math.random() * 40;
+                const body = Bodies.rectangle(
+                  100,
+                  100 + (i * (height + 20)),
+                  width,
+                  height,
+                  {
+                    frictionAir: 0,
+                    friction: 0,
+                    restitution: 0,
+                    inertia: Infinity,
+                    density: 0,
+                    chamfer: { radius: 12 },
+                    render: { fillStyle: 'transparent', lineWidth: 0 },
+                    isStatic: true
+                  }
+                ) as MatterBody;
+                (body as any).entry = { text: entry.entry_text };
+                console.log('Created new entry after swipe:', entry.entry_text);
+                return body;
+              });
+              
+              rectanglesRef.current = newBodies;
 
-            // Update the world with new bodies
-            World.clear(engineRef.current.world, true);
-            World.add(engineRef.current.world, [
-              ...rectanglesRef.current,
-              MouseConstraint.create(engineRef.current, {
-                mouse: Mouse.create(engineRef.current.render.canvas),
-                constraint: {
-                  stiffness: 0.01,
-                  damping: 0,
-                  render: { visible: false }
-                }
-              })
-            ]);
+              // Update the world with new bodies
+              if (engineRef.current) {
+                World.clear(engineRef.current.world, true);
+                World.add(engineRef.current.world, newBodies);
+              }
+            }
           }
 
-          // Reset cards if we've gone through all of them
+          // Check if we've gone through all cards
           if (gone.size === cards.length) {
-            gone.clear();
-            api.start(i => to(i));
             setAllCardsSwiped(true);
+            // Clear rectangle states when all cards are swiped
+            setRectangleStates([]);
+            // Clear the Matter.js world
+            if (engineRef.current) {
+              World.clear(engineRef.current.world, true);
+            }
           }
         }
       };
     });
-  }, [isAnimating, cards, currentCardIndex, gone, api]);
+  }, [isAnimating, cards, currentCardIndex, gone, api, getRelativePosition]);
 
   // Modify the keyboard event listener
   useEffect(() => {
@@ -354,8 +405,11 @@ const StoryView: React.FC = () => {
   useEffect(() => {
     if (!hasAccess || !cards.length || !sceneRef.current) return;
 
+    let render: Matter.Render | null = null;
+    let runner: Matter.Runner | null = null;
+
     const setupMatterJs = () => {
-      const { Engine, Render, World, Bodies, Body, Mouse, MouseConstraint, Composite, Runner } = Matter;
+      const { Engine, Render, World, Bodies, Mouse, MouseConstraint, Runner } = Matter;
 
       // Create engine
       engineRef.current = Engine.create({
@@ -364,7 +418,7 @@ const StoryView: React.FC = () => {
       });
 
       // Create renderer
-      const render = Render.create({
+      render = Render.create({
         element: sceneRef.current as HTMLElement,
         engine: engineRef.current,
         options: {
@@ -375,22 +429,24 @@ const StoryView: React.FC = () => {
         }
       });
 
-      // Get the visible card (the one currently on top)
+      // Get the visible card
       const visibleCardIndex = cards.length - 1 - [...gone].length;
       const visibleCard = cards[visibleCardIndex];
-      console.log('Visible card:', visibleCard);
+      console.log('Initial setup - Visible card index:', visibleCardIndex);
+      console.log('Initial setup - Visible card:', visibleCard);
       
+      if (!visibleCard || !render.canvas) return;
+
       // Calculate card dimensions
       const cardWidth = visibleCard.is_horizontal ? 675 : 281.25;
-      const cardHeight = 506.25;
       
-      // Create new bodies for each entry of the visible card
+      // Create new bodies for each entry
       rectanglesRef.current = visibleCard.entries.map((entry, i) => {
         const width = 280 + Math.random() * 40;
         const height = 160 + Math.random() * 40;
         const body = Bodies.rectangle(
-          window.innerWidth / 2 + cardWidth / 2 + 50,
-          window.innerHeight / 2 - (visibleCard.entries.length * height) / 2 + i * height,
+          100,
+          100 + (i * (height + 20)),
           width,
           height,
           {
@@ -400,38 +456,29 @@ const StoryView: React.FC = () => {
             inertia: Infinity,
             density: 0,
             chamfer: { radius: 12 },
-            render: { fillStyle: 'transparent', lineWidth: 0 }
+            render: { fillStyle: 'transparent', lineWidth: 0 },
+            isStatic: true
           }
         ) as MatterBody;
         (body as any).entry = { text: entry.entry_text };
-        console.log('Created body with entry:', entry.entry_text);
+        console.log('Initial setup - Created entry:', entry.entry_text);
         return body;
-      });
-
-      // Mouse control
-      const mouse = Mouse.create(render.canvas);
-      const mouseConstraint = MouseConstraint.create(engineRef.current, {
-        mouse,
-        constraint: {
-          stiffness: 0.01,
-          damping: 0,
-          render: { visible: false }
-        }
       });
 
       // Add all bodies to world
       World.add(engineRef.current.world, [
-        ...rectanglesRef.current,
-        mouseConstraint
+        ...rectanglesRef.current
       ]);
 
       // Start engine and renderer
-      const runner = Runner.create();
+      runner = Runner.create();
       Runner.run(runner, engineRef.current);
       Render.run(render);
 
       // Update states
       Matter.Events.on(engineRef.current, 'afterUpdate', () => {
+        if (!rectanglesRef.current.length) return;
+        
         setRectangleStates(
           rectanglesRef.current.map(rect => ({
             position: rect.position,
@@ -443,21 +490,25 @@ const StoryView: React.FC = () => {
           }))
         );
       });
-
-      // Cleanup
-      return () => {
-        Runner.stop(runner);
-        Render.stop(render);
-        if (engineRef.current) {
-          World.clear(engineRef.current.world, true);
-          Engine.clear(engineRef.current);
-        }
-        render.canvas.remove();
-      };
     };
 
     setupMatterJs();
-  }, [cards, currentCardIndex, hasAccess]);
+
+    // Cleanup function
+    return () => {
+      if (runner) {
+        Matter.Runner.stop(runner);
+      }
+      if (render) {
+        Matter.Render.stop(render);
+        render.canvas?.remove();
+      }
+      if (engineRef.current) {
+        Matter.World.clear(engineRef.current.world, true);
+        Matter.Engine.clear(engineRef.current);
+      }
+    };
+  }, [cards, currentCardIndex, hasAccess, gone]);
 
   const resetCycleTimer = () => {
     if (cycleTimerRef.current) {
@@ -491,7 +542,30 @@ const StoryView: React.FC = () => {
     setAllCardsSwiped(false);
     setCurrentCardIndex(0);
     gone.clear();
-    api.start(i => to(i));
+    
+    // Animate cards into a deck position with a smoother animation
+    api.start(i => {
+      // Calculate relative position in the deck - cards[0] is the bottom card
+      const relPos = i;
+      return {
+        x: 0,
+        y: i * -8,
+        scale: relPos === cards.length - 1 ? 1 : relPos === cards.length - 2 ? 0.5 : Math.max(0.2, 0.5 - ((cards.length - 1 - relPos) - 1) * 0.05),
+        rot: -10 + Math.random() * 20,
+        delay: i * 100, // Slower stacking animation for better visual effect
+        config: { 
+          tension: 400, // Increased tension for snappier animation
+          friction: 40, // Adjusted friction for smoother movement
+          mass: 1 // Added mass for better physics feel
+        }
+      };
+    });
+  };
+
+  // Prevent default drag behavior
+  const preventDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    return false;
   };
 
   if (!hasAccess) {
@@ -506,6 +580,10 @@ const StoryView: React.FC = () => {
       
       <div className="w-full h-full absolute inset-0 z-20">
         {props.map(({ x, y, rot, scale }, i) => {
+          // Calculate z-index based on position in the deck (higher for cards on top)
+          const relPos = getRelativePosition(i);
+          const zIndex = 1000 - (relPos >= 0 ? relPos : 1000);
+
           return (
             <animated.div 
               key={i} 
@@ -520,6 +598,10 @@ const StoryView: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'visible', 
+                opacity: allCardsSwiped ? 0 : 1,
+                transition: 'opacity 0.5s ease-out',
+                pointerEvents: allCardsSwiped ? 'none' : 'auto',
+                zIndex
               }}
             >
               <div style={{ position: 'relative' }}>
@@ -538,47 +620,37 @@ const StoryView: React.FC = () => {
                     overflow: 'hidden',
                     position: 'relative'
                   }}
+                  onDragStart={preventDrag}
                 >
                   {cards[i].card_url.match(/\.(mov|mp4)$/i) ? (
-                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                    <div 
+                      style={{ position: 'relative', width: '100%', height: '100%' }}
+                      onClick={() => {
+                        const videoRef = videoRefs.current[cards[i].card_id];
+                        if (videoRef) {
+                          if (videoRef.paused) {
+                            videoRef.play();
+                          } else {
+                            videoRef.pause();
+                          }
+                        }
+                      }}
+                      onDragStart={preventDrag}
+                    >
                       <video
+                        ref={el => videoRefs.current[cards[i].card_id] = el}
                         src={`${API_BASE_URL}${cards[i].card_url}`}
                         style={{
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover'
                         }}
-                        autoPlay
                         loop
-                        muted={isVideoMuted}
+                        muted={false}
                         playsInline
-                        onClick={(e) => {
-                          const video = e.currentTarget;
-                          video.muted = !video.muted;
-                          setIsVideoMuted(!isVideoMuted);
-                        }}
+                        draggable="false"
+                        onDragStart={preventDrag}
                       />
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          bottom: '20px',
-                          right: '20px',
-                          background: 'rgba(0, 0, 0, 0.5)',
-                          padding: '8px 12px',
-                          borderRadius: '20px',
-                          color: 'white',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontFamily: 'Papyrus'
-                        }}
-                        onClick={(e) => {
-                          const video = e.currentTarget.previousSibling as HTMLVideoElement;
-                          video.muted = !video.muted;
-                          setIsVideoMuted(!isVideoMuted);
-                        }}
-                      >
-                        Click to {isVideoMuted ? 'unmute' : 'mute'}
-                      </div>
                     </div>
                   ) : (
                     <img
@@ -589,6 +661,8 @@ const StoryView: React.FC = () => {
                         objectFit: 'cover'
                       }}
                       alt={cards[i].card_name}
+                      draggable="false"
+                      onDragStart={preventDrag}
                     />
                   )}
                 </animated.div>
@@ -600,61 +674,61 @@ const StoryView: React.FC = () => {
 
       {/* Add CommentInput below the cards */}
       <div className="absolute bottom-8 left-0 right-0 z-20">
-        {cards.length > 0 && !allCardsSwiped && (
+        {cards.length > 0 && !allCardsSwiped && cards[cards.length - 1 - [...gone].length] && (
           <CommentInput 
             cardId={cards[cards.length - 1 - [...gone].length].card_id} 
             isSubmitting={isAnimating}
             onSubmitSuccess={() => {
-              // Optionally refresh the entries or show a success message
               console.log('Comment submitted successfully');
             }}
           />
         )}
       </div>
 
-      {/* Add Start Over button */}
+      {/* Update Start Over button styling and position */}
       {allCardsSwiped && (
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          onClick={handleStartOver}
-          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-30
-                   bg-white/20 hover:bg-white/30 text-white font-papyrus py-3 px-6 rounded-lg
-                   backdrop-blur-sm border border-white/30 transition-all duration-300
-                   shadow-lg hover:shadow-xl"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8 }}
+          className="absolute inset-0 flex items-center justify-center z-30"
         >
-          Start Over
-        </motion.button>
+          <motion.button
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            onClick={handleStartOver}
+            style={{
+              fontFamily: 'Papyrus',
+              textTransform: 'lowercase',
+              letterSpacing: '0.05em'
+            }}
+            className="bg-white/30 hover:bg-white/40 text-white py-6 px-12 rounded-xl
+                     backdrop-blur-md border-2 border-white/40 transition-all duration-300
+                     shadow-xl hover:shadow-2xl text-3xl hover:scale-105"
+          >
+            start over
+          </motion.button>
+        </motion.div>
       )}
 
-      <div className="absolute inset-0 z-30 pointer-events-none">
-        {rectangleStates.map((rect, index) => (
-          <Entry
-            key={`entry-${index}-${cycleCount}-${currentCardIndex}`}
-            text={rect.entry.text}
-            position={rect.position}
-            dimensions={rect.dimensions}
-            index={index}
-            cycleCount={cycleCount}
-          />
-        ))}
-      </div>
+      {/* Only render Entry components if not all cards are swiped */}
+      {!allCardsSwiped && (
+        <div className="absolute inset-0 z-30 pointer-events-none">
+          {rectangleStates.map((rect, index) => (
+            <Entry
+              key={`entry-${index}-${cycleCount}-${currentCardIndex}`}
+              text={rect.entry.text}
+              position={rect.position}
+              dimensions={rect.dimensions}
+              index={index}
+              cycleCount={cycleCount}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-
-const to = (i: number) => ({
-  x: 0,
-  y: i * -8,
-  scale: 1,
-  rot: -10 + Math.random() * 20,
-  delay: i * 100,
-});
-
-const from = (_i: number) => ({ x: 0, rot: 0, scale: 1.5, y: -1000 });
-
-const trans = (r: number, s: number) =>
-  `perspective(1000px) rotateX(5deg) rotateY(${r / 20}deg) rotateZ(${r}deg) scale(${s})`;
 
 export default StoryView;

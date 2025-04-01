@@ -26,8 +26,8 @@ const IntroPage: React.FC<IntroPageProps> = ({ onAccessGranted }) => {
         transition={{ duration: 0.5 }}
         className="bg-white/10 backdrop-blur-md p-8 rounded-xl shadow-lg max-w-md w-full mx-4"
       >
-        <h1 className="text-3xl font-papyrus text-white mb-6 text-center">
-          Welcome to the Story
+        <h1 className="text-3xl text-white mb-6 text-center" style={{ fontFamily: 'Papyrus' }}>
+          svitlana-ing into 26
         </h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -35,18 +35,20 @@ const IntroPage: React.FC<IntroPageProps> = ({ onAccessGranted }) => {
               type="text"
               value={accessCode}
               onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="Enter access code"
-              className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-2 text-white placeholder-white/50 focus:outline-none focus:border-white/50 font-papyrus"
+              placeholder="ask svitlana for the keys"
+              className="w-full bg-white/20 border border-white/30 rounded-lg px-4 py-2 text-white placeholder-white/50 focus:outline-none focus:border-white/50"
+              style={{ fontFamily: 'Papyrus' }}
             />
           </div>
           {error && (
-            <p className="text-red-300 text-sm text-center">{error}</p>
+            <p className="text-red-300 text-sm text-center" style={{ fontFamily: 'Papyrus' }}>{error}</p>
           )}
           <button
             type="submit"
-            className="w-full bg-white/20 hover:bg-white/30 text-white font-papyrus py-2 rounded-lg transition-colors"
+            className="w-full bg-white/20 hover:bg-white/30 text-white py-2 rounded-lg transition-colors"
+            style={{ fontFamily: 'Papyrus' }}
           >
-            Enter
+            flow in
           </button>
         </form>
       </motion.div>
