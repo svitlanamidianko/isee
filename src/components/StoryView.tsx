@@ -18,7 +18,7 @@ Matter.use(MatterAttractors);
 Matter.use(MatterWrap);
 
 // Set the gravity constant for the attractors
-MatterAttractors.Attractors.gravityConstant = 0.0001;
+MatterAttractors.Attractors.gravityConstant = 0.001;
 
 // Move interfaces to the top
 interface Card {
@@ -60,7 +60,7 @@ const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, opacit
       initial={{ opacity: 0 }}
       animate={{ opacity }}
       transition={{ duration: 0.5 }}
-      className="absolute flex items-start p-4 backdrop-blur-xl rounded-lg"
+      className="absolute flex items-start p-3 backdrop-blur-xl rounded-lg"
       style={{
         left: position.x - dimensions.width / 2,
         top: position.y - dimensions.height / 2,
@@ -71,15 +71,15 @@ const Entry: React.FC<EntryProps> = ({ text, position, dimensions, index, opacit
         cursor: 'grab',
         pointerEvents: 'auto',
         fontFamily: 'Papyrus',
-        zIndex: 1000
+        zIndex: 1
       }}
     >
       <div 
         className="flex-1 overflow-hidden text-left pb-4 pr-2 select-none"
         style={{
           fontWeight: 400,
-          color: '#666666',
-          textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          color: '#ffffff',
+          textShadow: '0 1px 4px rgba(0,0,0,1.0)',
           fontSize: '18px',
           lineHeight: '1.4',
           letterSpacing: '0.02em'
@@ -97,11 +97,12 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
 
   return (
     <motion.div 
-      className="absolute text-center"
+      className="absolute text-center z-1000"
       style={{ 
         width: '200%',
         left: '-50%',
-        bottom: 'calc(100% + 1.5rem)'
+        bottom: 'calc(100% + 1.5rem)',
+        zIndex: 100
       }}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -109,7 +110,7 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
     >
       {text && (
         <div 
-          className="text-white text-3xl leading-relaxed mb-3 font-medium"
+          className="text-white text-3xl leading-relaxed mb-3 font-medium z-50"
           style={{ 
             fontFamily: 'Papyrus',
             textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
@@ -124,7 +125,7 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
           href={linkie} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-300 text-sm hover:text-blue-200 transition-colors"
+          className="text-blue-300 text-sm hover:text-blue-200 transition-colors z-50"
           style={{ 
             textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
             display: 'inline-block'
@@ -344,8 +345,7 @@ const StoryView: React.FC = () => {
     });
     engineRef.current = engine;
     
-    // Remove gravity
-    engine.world.gravity.y = 0;
+   
     
     // Create renderer - this is crucial for mouse events
     const render = Matter.Render.create({
@@ -365,7 +365,7 @@ const StoryView: React.FC = () => {
     const centerY = window.innerHeight / 2;
     
     // Create an invisible attractor body
-    const attractor = Matter.Bodies.circle(centerX, centerY, 10, {
+    const attractor = Matter.Bodies.circle(centerX, centerY, 64, {
       isStatic: true,
       render: { visible: true },
       plugin: {
@@ -382,8 +382,8 @@ const StoryView: React.FC = () => {
     attractorRef.current = attractor;
     
     // Add very gentle gravity in x and y direction
-    engine.gravity.x = 0.005;
-    engine.gravity.y = 0.005;
+    // engine.gravity.x = 0.005;
+    engine.gravity.y = 0.01;
     
     // Create bodies for entries
     const entryBodies = currentCard.entries.map((entry, i) => {
@@ -477,7 +477,7 @@ const StoryView: React.FC = () => {
     
     // 8. Limit maximum velocity (keep your existing code)
     Matter.Events.on(engine, 'beforeUpdate', () => {
-      const maxVelocity = 2;
+      const maxVelocity = 4;
       
       entryBodies.forEach(body => {
         const velocity = Matter.Vector.magnitude(body.velocity);
@@ -491,17 +491,7 @@ const StoryView: React.FC = () => {
       });
     });
     
-    // Update body positions in state (keep your existing code)
-    let fadeOpacity = 0;
-    let fadeTimer: NodeJS.Timeout | null = null;
     
-    fadeTimer = setInterval(() => {
-      fadeOpacity += 0.05;
-      if (fadeOpacity >= 1) {
-        fadeOpacity = 1;
-        if (fadeTimer) clearInterval(fadeTimer);
-      }
-    }, 100);
     
     Matter.Events.on(engine, 'afterUpdate', () => {
       if (!rectanglesRef.current.length) return;
@@ -514,7 +504,7 @@ const StoryView: React.FC = () => {
             height: rect.bounds.max.y - rect.bounds.min.y - 20
           },
           entry: rect.entry || { text: '' },
-          opacity: fadeOpacity,
+          opacity: 1,
           initialDimensions: rect.initialDimensions
         }))
       );
