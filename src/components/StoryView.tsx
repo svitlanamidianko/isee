@@ -99,8 +99,8 @@ const CardText: React.FC<{ text: string; linkie: string }> = ({ text, linkie }) 
     <motion.div 
       className="absolute text-center z-1000"
       style={{ 
-        width: '200%',
-        left: '-50%',
+        width: '150%',
+        left: '-30%',
         bottom: 'calc(100% + 1.5rem)',
         zIndex: 100
       }}
