@@ -176,7 +176,9 @@ export const useCardDeck = (initialCards: Card[]) => {
     setSwipeOrder(prev => prev.slice(0, -1));
     setCurrentCardIndex(prev => prev + 1);
 
+    // Calculate new positions for all cards
     api.start(i => {
+      // This is the card we're bringing back
       if (i === lastSwipedIndex) {
         return {
           x: 0,
@@ -194,12 +196,24 @@ export const useCardDeck = (initialCards: Card[]) => {
           }
         };
       }
+
+      // For all other cards, calculate their new position in the stack
+      const newGoneSize = gone.size;
+      const topCardIndex = cards.length - 1 - newGoneSize;
       
-      // For other cards, maintain their current positions
-      const relPos = getRelativePosition(i);
-      if (relPos >= 0) {
+      // If this card should be visible
+      if (!gone.has(i)) {
+        // Calculate scale based on position from top
+        const distanceFromTop = topCardIndex - i;
+        const scale = distanceFromTop === 0 ? 1 : 
+                     distanceFromTop === 1 ? 0.5 : 
+                     Math.max(0.2, 0.5 - (distanceFromTop - 1) * 0.05);
+        
         return {
-          ...to(i, cards, gone),
+          x: 0,
+          y: 0,
+          rot: 0,
+          scale,
           config: {
             mass: 1,
             tension: 180,
@@ -208,6 +222,7 @@ export const useCardDeck = (initialCards: Card[]) => {
           }
         };
       }
+      
       return;
     });
 
@@ -216,7 +231,7 @@ export const useCardDeck = (initialCards: Card[]) => {
       setIsAnimating(false);
     }, 100);
     
-  }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex, getRelativePosition]);
+  }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex]);
 
   const reset = useCallback(() => {
     setAllCardsSwiped(false);

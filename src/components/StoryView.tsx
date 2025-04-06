@@ -7,6 +7,7 @@ import IntroPage from './IntroPage';
 import Card from './Card';
 import CardText from './CardText';
 import Entry from './Entry';
+import LoadingView from './LoadingView';
 import { useStoryView } from '../hooks/useStoryView';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import './StoryView.css';
@@ -80,16 +81,7 @@ const StoryView: React.FC = () => {
   }
 
   if (isLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center text-white" style={{ 
-        fontFamily: 'Papyrus',
-        fontSize: '1.5rem',
-        textAlign: 'center',
-        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-      }}>
-        baking svitlana-ing home-cooked app. wait a sec
-      </div>
-    );
+    return <LoadingView />;
   }
 
   if (error) {
