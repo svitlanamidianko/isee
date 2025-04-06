@@ -17,6 +17,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
 }) => {
   const [comment, setComment] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
 
   // Clear comment when cardId changes
   useEffect(() => {
@@ -24,8 +25,9 @@ const CommentInput: React.FC<CommentInputProps> = ({
   }, [cardId]);
 
   const submitComment = async () => {
-    if (!comment.trim()) return;
+    if (!comment.trim() || isSubmittingEntry) return;
 
+    setIsSubmittingEntry(true);
     try {
       const response = await fetch(API_ENDPOINTS.createEntry, {
         method: 'POST',
@@ -42,17 +44,24 @@ const CommentInput: React.FC<CommentInputProps> = ({
         throw new Error('Failed to submit comment');
       }
 
+      // Only trigger success callback and swipe after successful submission
       if (onSubmitSuccess) {
         onSubmitSuccess();
       }
     } catch (err) {
       console.error('Error submitting comment:', err);
+      setError('Failed to submit comment');
+    } finally {
+      setIsSubmittingEntry(false);
+      if (onSubmittingChange) {
+        onSubmittingChange(false);
+      }
     }
   };
 
   // Auto-submit when isSubmitting becomes true
   useEffect(() => {
-    if (isSubmitting) {
+    if (isSubmitting && !isSubmittingEntry) {
       submitComment();
     }
   }, [isSubmitting]);
@@ -72,7 +81,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (onSubmittingChange) {
+              if (onSubmittingChange && !isSubmittingEntry) {
                 onSubmittingChange(true);
               }
             }
@@ -90,7 +99,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
             fontFamily: 'Papyrus, fantasy',
             textShadow: '0 0 10px rgba(255,255,255,0.3)'
           }}
-          disabled={isSubmitting}
+          disabled={isSubmittingEntry}
         />
       </div>
     </motion.div>

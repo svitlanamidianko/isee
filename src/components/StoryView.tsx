@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { useDrag } from '@use-gesture/react';
 import { motion } from 'framer-motion';
 import { animated } from '@react-spring/web';
@@ -8,6 +8,7 @@ import Card from './Card';
 import CardText from './CardText';
 import Entry from './Entry';
 import LoadingView from './LoadingView';
+import ErrorView from './ErrorView';
 import { useStoryView } from '../hooks/useStoryView';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import './StoryView.css';
@@ -34,7 +35,9 @@ const StoryView: React.FC = () => {
     currentCard,
     entryStates,
     handleCommentSubmit,
-    handleSubmittingChange
+    handleSubmittingChange,
+    retryFetch,
+    isSubmittingEntry
   } = useStoryView();
 
   // Use keyboard navigation
@@ -85,7 +88,7 @@ const StoryView: React.FC = () => {
   }
 
   if (error) {
-    return <div className="fixed inset-0 flex items-center justify-center text-red-500">Error: {error}</div>;
+    return <ErrorView error={error} onRetry={retryFetch} />;
   }
 
   if (cards.length === 0) return null;
@@ -167,7 +170,7 @@ const StoryView: React.FC = () => {
         {cards.length > 0 && !allCardsSwiped && currentCard && (
           <CommentInput 
             cardId={currentCard.card_id} 
-            isSubmitting={isAnimating}
+            isSubmitting={isSubmittingEntry}
             onSubmitSuccess={handleCommentSubmit}
             onSubmittingChange={handleSubmittingChange}
           />

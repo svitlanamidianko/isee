@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { useCardDeck } from './useCardDeck';
 import { useEntries } from './useEntries';
@@ -19,6 +19,7 @@ export const useStoryView = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
 
   // Use our card deck hook
   const {
@@ -38,41 +39,51 @@ export const useStoryView = () => {
   const entryStates = useEntries(currentCard);
 
   // Fetch story data
-  useEffect(() => {
-    const fetchStoryData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await fetch(API_ENDPOINTS.storyView);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('API Response:', data);
-        // Sort cards in descending order (highest to lowest)
-        const sortedCards = data.cards.sort((a: Card, b: Card) => parseInt(b.order) - parseInt(a.order));
-        console.log('Setting sorted cards:', sortedCards);
-        setCards(sortedCards);
-      } catch (error) {
-        console.error('Error fetching cards:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch story data');
-      } finally {
-        setIsLoading(false);
+  const fetchStoryData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch(API_ENDPOINTS.storyView);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
-
-    fetchStoryData();
+      const data = await response.json();
+      console.log('API Response:', data);
+      // Sort cards in descending order (highest to lowest)
+      const sortedCards = data.cards.sort((a: Card, b: Card) => parseInt(b.order) - parseInt(a.order));
+      console.log('Setting sorted cards:', sortedCards);
+      setCards(sortedCards);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch story data');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const handleCommentSubmit = () => {
-    console.log('Comment submitted successfully');
-  };
+  // Initial fetch
+  useEffect(() => {
+    fetchStoryData();
+  }, [fetchStoryData]);
 
-  const handleSubmittingChange = (submitting: boolean) => {
-    if (submitting && currentCard) {
-      swipeCard(cards.indexOf(currentCard), 1);
+  const handleCommentSubmit = useCallback(() => {
+    console.log('Comment submitted successfully');
+    // Only swipe the card after successful submission
+    if (currentCard) {
+      const currentIndex = cards.indexOf(currentCard);
+      if (currentIndex !== -1) {
+        swipeCard(currentIndex, 1);
+      }
     }
-  };
+  }, [currentCard, cards, swipeCard]);
+
+  const handleSubmittingChange = useCallback((submitting: boolean) => {
+    setIsSubmittingEntry(submitting);
+  }, []);
+
+  const retryFetch = useCallback(() => {
+    fetchStoryData();
+  }, [fetchStoryData]);
 
   return {
     hasAccess,
@@ -92,6 +103,8 @@ export const useStoryView = () => {
     currentCard,
     entryStates,
     handleCommentSubmit,
-    handleSubmittingChange
+    handleSubmittingChange,
+    retryFetch,
+    isSubmittingEntry
   };
 }; 
