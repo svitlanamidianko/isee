@@ -52,6 +52,7 @@ export const useCardDeck = (initialCards: Card[]) => {
   const [swipeOrder, setSwipeOrder] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allCardsSwiped, setAllCardsSwiped] = useState(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(initialCards.length - 1);
   const lastSwipeTime = useRef(Date.now());
 
   const [springs, api] = useSprings(cards.length || 0, i => {
@@ -66,6 +67,9 @@ export const useCardDeck = (initialCards: Card[]) => {
   useEffect(() => {
     console.log('Cards updated in useCardDeck:', initialCards);
     setCards(initialCards);
+    const newIndex = initialCards.length - 1;
+    console.log('Setting current card index to:', newIndex);
+    setCurrentCardIndex(newIndex);
     
     // Reset and update springs when cards change
     if (initialCards.length > 0) {
@@ -88,18 +92,27 @@ export const useCardDeck = (initialCards: Card[]) => {
     return index - (cards.length - goneCount - 1);
   }, [gone, cards.length]);
 
+  const getCurrentCard = useCallback(() => {
+    console.log('getCurrentCard called with index:', currentCardIndex);
+    console.log('Available cards:', cards);
+    const card = currentCardIndex >= 0 ? cards[currentCardIndex] : null;
+    console.log('Returning card:', card);
+    return card;
+  }, [currentCardIndex, cards]);
+
   const swipeCard = useCallback((index: number, direction: number) => {
-    if (isAnimating || cards.length === 0) return;
+    if (isAnimating || cards.length === 0 || index !== currentCardIndex) return;
 
     // Reduce cooldown time for keyboard navigation
     const now = Date.now();
-    const minSwipeInterval = 50; // Reduced from 150ms to 50ms
+    const minSwipeInterval = 50;
     if (now - lastSwipeTime.current < minSwipeInterval) return;
     lastSwipeTime.current = now;
 
     setIsAnimating(true);
     gone.add(index);
     setSwipeOrder(prev => [...prev, index]);
+    setCurrentCardIndex(prev => prev - 1);
 
     api.start(i => {
       if (index !== i) {
@@ -147,13 +160,13 @@ export const useCardDeck = (initialCards: Card[]) => {
       setIsAnimating(false);
     }, 100);
 
-  }, [isAnimating, cards, gone, api, getRelativePosition]);
+  }, [isAnimating, cards, gone, api, getRelativePosition, currentCardIndex]);
 
   const goBack = useCallback(() => {
-    if (isAnimating || gone.size === 0) return;
+    if (isAnimating || currentCardIndex >= cards.length - 1) return;
 
     const now = Date.now();
-    const minSwipeInterval = 50; // Match the swipeCard interval
+    const minSwipeInterval = 50;
     if (now - lastSwipeTime.current < minSwipeInterval) return;
     lastSwipeTime.current = now;
 
@@ -161,6 +174,7 @@ export const useCardDeck = (initialCards: Card[]) => {
     const lastSwipedIndex = swipeOrder[swipeOrder.length - 1];
     gone.delete(lastSwipedIndex);
     setSwipeOrder(prev => prev.slice(0, -1));
+    setCurrentCardIndex(prev => prev + 1);
 
     api.start(i => {
       if (i === lastSwipedIndex) {
@@ -196,7 +210,7 @@ export const useCardDeck = (initialCards: Card[]) => {
       setIsAnimating(false);
     }, 100);
     
-  }, [isAnimating, gone, api, swipeOrder, cards]);
+  }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex]);
 
   const reset = useCallback(() => {
     setAllCardsSwiped(false);
@@ -229,6 +243,7 @@ export const useCardDeck = (initialCards: Card[]) => {
     goBack,
     reset,
     getRelativePosition,
-    api
+    api,
+    currentCard: getCurrentCard()
   };
 }; 

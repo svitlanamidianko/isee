@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { animated, useSprings } from '@react-spring/web';
+import { animated } from '@react-spring/web';
 import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import CommentInput from './CommentInput';
 import IntroPage from './IntroPage';
 import Card from './Card';
 import CardText from './CardText';
+import Entry from './Entry';
 import { useCardDeck } from '../hooks/useCardDeck';
+import { useEntries } from '../hooks/useEntries';
 import './StoryView.css';
 
 // Move interfaces to the top
@@ -38,8 +40,12 @@ const StoryView: React.FC = () => {
     goBack,
     reset,
     getRelativePosition,
-    api
+    api,
+    currentCard
   } = useCardDeck(cards);
+
+  // Use currentCard directly for entries
+  const entryStates = useEntries(currentCard);
 
   useEffect(() => {
     const fetchStoryData = async () => {
@@ -241,6 +247,21 @@ const StoryView: React.FC = () => {
             start over
           </motion.button>
         </motion.div>
+      )}
+
+      {/* Add entries */}
+      {!allCardsSwiped && currentCard && (
+        <div className="absolute inset-0 z-30 pointer-events-none">
+          {entryStates.map((state, index) => (
+            <Entry
+              key={`entry-${index}-${currentCard.card_id}`}
+              text={state.text}
+              position={state.position}
+              dimensions={state.dimensions}
+              opacity={state.opacity}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
