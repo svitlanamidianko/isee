@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSprings } from '@react-spring/web';
 
 interface Card {
@@ -35,21 +35,52 @@ const to = (i: number, cards: Card[], gone: Set<number>) => {
     scale,
     rot,
     delay: i * 100,
+    config: {
+      mass: 1,
+      tension: 180,
+      friction: 50,
+      precision: 0.001
+    }
   };
 };
 
 export const useCardDeck = (initialCards: Card[]) => {
-  const [cards] = useState<Card[]>(initialCards);
+  console.log('useCardDeck called with cards:', initialCards);
+  
+  const [cards, setCards] = useState<Card[]>(initialCards);
   const [gone] = useState(() => new Set<number>());
   const [swipeOrder, setSwipeOrder] = useState<number[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allCardsSwiped, setAllCardsSwiped] = useState(false);
   const lastSwipeTime = useRef(Date.now());
 
-  const [springs, api] = useSprings(cards.length, i => ({
-    ...to(i, cards, gone),
-    from: from(i)
-  }));
+  const [springs, api] = useSprings(cards.length || 0, i => {
+    console.log('Creating spring for card', i, 'out of', cards.length);
+    return {
+      ...to(i, cards, gone),
+      from: from(i)
+    };
+  });
+
+  // Update cards when initialCards changes
+  useEffect(() => {
+    console.log('Cards updated in useCardDeck:', initialCards);
+    setCards(initialCards);
+    
+    // Reset and update springs when cards change
+    if (initialCards.length > 0) {
+      gone.clear();
+      setSwipeOrder([]);
+      setIsAnimating(false);
+      setAllCardsSwiped(false);
+      
+      api.start(i => ({
+        ...to(i, initialCards, gone),
+        from: from(i),
+        immediate: false
+      }));
+    }
+  }, [initialCards, api, gone]);
 
   const getRelativePosition = useCallback((index: number): number => {
     const goneCount = gone.size;
@@ -60,8 +91,10 @@ export const useCardDeck = (initialCards: Card[]) => {
   const swipeCard = useCallback((index: number, direction: number) => {
     if (isAnimating || cards.length === 0) return;
 
+    // Reduce cooldown time for keyboard navigation
     const now = Date.now();
-    if (now - lastSwipeTime.current < 150) return;
+    const minSwipeInterval = 50; // Reduced from 150ms to 50ms
+    if (now - lastSwipeTime.current < minSwipeInterval) return;
     lastSwipeTime.current = now;
 
     setIsAnimating(true);
@@ -72,7 +105,15 @@ export const useCardDeck = (initialCards: Card[]) => {
       if (index !== i) {
         const relPos = getRelativePosition(i);
         if (relPos >= 0) {
-          return to(i, cards, gone);
+          return {
+            ...to(i, cards, gone),
+            config: {
+              mass: 1,
+              tension: 180,
+              friction: 50,
+              precision: 0.001
+            }
+          };
         }
         return;
       }
@@ -85,8 +126,14 @@ export const useCardDeck = (initialCards: Card[]) => {
         rot,
         scale: 1,
         delay: undefined,
-        config: { friction: 50, tension: 200 },
+        config: { 
+          friction: 50, 
+          tension: 200,
+          mass: 1,
+          precision: 0.001
+        },
         onRest: () => {
+          // Reset isAnimating immediately after the swipe animation
           setIsAnimating(false);
           if (gone.size === cards.length) {
             setAllCardsSwiped(true);
@@ -94,13 +141,20 @@ export const useCardDeck = (initialCards: Card[]) => {
         }
       };
     });
+
+    // Allow next swipe sooner by resetting isAnimating after a shorter delay
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 100);
+
   }, [isAnimating, cards, gone, api, getRelativePosition]);
 
   const goBack = useCallback(() => {
     if (isAnimating || gone.size === 0) return;
 
     const now = Date.now();
-    if (now - lastSwipeTime.current < 150) return;
+    const minSwipeInterval = 50; // Match the swipeCard interval
+    if (now - lastSwipeTime.current < minSwipeInterval) return;
     lastSwipeTime.current = now;
 
     setIsAnimating(true);
@@ -115,14 +169,33 @@ export const useCardDeck = (initialCards: Card[]) => {
           y: 0,
           rot: 0,
           scale: 1,
-          config: { friction: 50, tension: 200 },
+          config: { 
+            friction: 50, 
+            tension: 180,
+            mass: 1,
+            precision: 0.001
+          },
           onRest: () => {
             setIsAnimating(false);
           }
         };
       }
-      return to(i, cards, gone);
+      return {
+        ...to(i, cards, gone),
+        config: {
+          mass: 1,
+          tension: 180,
+          friction: 50,
+          precision: 0.001
+        }
+      };
     });
+
+    // Allow next action sooner
+    setTimeout(() => {
+      setIsAnimating(false);
+    }, 100);
+    
   }, [isAnimating, gone, api, swipeOrder, cards]);
 
   const reset = useCallback(() => {
@@ -155,6 +228,7 @@ export const useCardDeck = (initialCards: Card[]) => {
     swipeCard,
     goBack,
     reset,
-    getRelativePosition
+    getRelativePosition,
+    api
   };
 }; 
