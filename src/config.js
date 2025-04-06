@@ -1,6 +1,9 @@
 // Backend API configuration
-export const API_BASE_URL = 'http://localhost:7777'; // Change this to your local backend URL
+const isStaging = process.env.REACT_APP_USE_STAGING === 'true';
 
+export const API_BASE_URL = isStaging 
+  ? 'https://isee-api-staging-twilight-grass-3635.fly.dev'
+  : 'http://localhost:7777';
 
 // API endpoints
 export const API_ENDPOINTS = {
