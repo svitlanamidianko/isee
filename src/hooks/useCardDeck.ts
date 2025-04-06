@@ -140,9 +140,9 @@ export const useCardDeck = (initialCards: Card[]) => {
         scale: 1,
         delay: undefined,
         config: { 
-          friction: 50, 
-          tension: 200,
-          mass: 1,
+          friction: 80,
+          tension: 120,
+          mass: 1.2,
           precision: 0.001
         },
         onRest: () => {
@@ -194,15 +194,21 @@ export const useCardDeck = (initialCards: Card[]) => {
           }
         };
       }
-      return {
-        ...to(i, cards, gone),
-        config: {
-          mass: 1,
-          tension: 180,
-          friction: 50,
-          precision: 0.001
-        }
-      };
+      
+      // For other cards, maintain their current positions
+      const relPos = getRelativePosition(i);
+      if (relPos >= 0) {
+        return {
+          ...to(i, cards, gone),
+          config: {
+            mass: 1,
+            tension: 180,
+            friction: 50,
+            precision: 0.001
+          }
+        };
+      }
+      return;
     });
 
     // Allow next action sooner
@@ -210,7 +216,7 @@ export const useCardDeck = (initialCards: Card[]) => {
       setIsAnimating(false);
     }, 100);
     
-  }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex]);
+  }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex, getRelativePosition]);
 
   const reset = useCallback(() => {
     setAllCardsSwiped(false);

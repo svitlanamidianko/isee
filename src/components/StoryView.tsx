@@ -1,37 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { animated } from '@react-spring/web';
-import { API_ENDPOINTS, API_BASE_URL } from '../config';
 import CommentInput from './CommentInput';
 import IntroPage from './IntroPage';
 import Card from './Card';
 import CardText from './CardText';
 import Entry from './Entry';
-import { useCardDeck } from '../hooks/useCardDeck';
-import { useEntries } from '../hooks/useEntries';
+import { useStoryView } from '../hooks/useStoryView';
+import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import './StoryView.css';
 
-// Move interfaces to the top
-interface Card {
-  card_id: string;
-  card_name: string;
-  card_url: string;
-  entries: Array<{ entry_text: string }>;
-  linkie: string;
-  order: string;
-  text: string;
-  is_horizontal: boolean;
-}
-
 const StoryView: React.FC = () => {
-  const [hasAccess, setHasAccess] = useState(true);
-  const [cards, setCards] = useState<Card[]>([]);
-  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
   const sceneRef = useRef<HTMLDivElement>(null);
-
-  // Use our new card deck hook
+  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
+  
   const {
+    hasAccess,
+    setHasAccess,
+    cards,
+    isLoading,
+    error,
     springs,
     gone,
     isAnimating,
@@ -41,43 +30,27 @@ const StoryView: React.FC = () => {
     reset,
     getRelativePosition,
     api,
-    currentCard
-  } = useCardDeck(cards);
+    currentCard,
+    entryStates,
+    handleCommentSubmit,
+    handleSubmittingChange
+  } = useStoryView();
 
-  // Use currentCard directly for entries
-  const entryStates = useEntries(currentCard);
-
-  useEffect(() => {
-    const fetchStoryData = async () => {
-      try {
-        const response = await fetch(API_ENDPOINTS.storyView);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('API Response:', data);
-        // Sort cards in descending order (highest to lowest)
-        const sortedCards = data.cards.sort((a: Card, b: Card) => parseInt(b.order) - parseInt(a.order));
-        console.log('Setting sorted cards:', sortedCards);
-        setCards(sortedCards);
-      } catch (error) {
-        console.error('Error fetching cards:', error);
-      }
-    };
-
-    fetchStoryData();
-  }, []);
-
-  // Add debug log for springs
-  console.log('Current springs:', springs);
+  // Use keyboard navigation
+  useKeyboardNavigation({
+    sceneRef,
+    isAnimating,
+    currentCardIndex: currentCard ? cards.indexOf(currentCard) : -1,
+    cardsLength: cards.length,
+    swipeCard,
+    goBack
+  });
 
   // Add the bind function from useDrag
   const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity }) => {
     if (isAnimating) return;
     
-    // Get the current card being dragged
-    const currentCardIndex = cards.length - 1 - [...gone].length;
-    if (index !== currentCardIndex) return;
+    if (!currentCard || index !== cards.indexOf(currentCard)) return;
     
     const trigger = Math.abs(mx) > 100 || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > 0.2;
     const dir = xDir < 0 ? -1 : 1;
@@ -102,32 +75,25 @@ const StoryView: React.FC = () => {
     }
   });
 
-  // Handle keyboard navigation
-  useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        const currentCardIndex = cards.length - 1 - [...gone].length;
-        if (currentCardIndex >= 0 && !isAnimating) {
-          swipeCard(currentCardIndex, 1);
-        }
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goBack();
-      }
-    };
-
-    if (sceneRef.current) {
-      sceneRef.current.tabIndex = 0;
-      sceneRef.current.focus();
-    }
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isAnimating, cards.length, gone, swipeCard, goBack]);
-
   if (!hasAccess) {
     return <IntroPage onAccessGranted={() => setHasAccess(true)} />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center text-white" style={{ 
+        fontFamily: 'Papyrus',
+        fontSize: '1.5rem',
+        textAlign: 'center',
+        textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+      }}>
+        baking svitlana-ing home-cooked app. wait a sec
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="fixed inset-0 flex items-center justify-center text-red-500">Error: {error}</div>;
   }
 
   if (cards.length === 0) return null;
@@ -139,7 +105,7 @@ const StoryView: React.FC = () => {
         className="w-full h-full absolute inset-0 z-10 pointer-events-auto" 
       />
       
-      {/* Add back arrow button */}
+      {/* Back arrow button */}
       {gone.size > 0 && !isAnimating && !allCardsSwiped && (
         <motion.button
           initial={{ opacity: 0, x: -20 }}
@@ -162,6 +128,7 @@ const StoryView: React.FC = () => {
         </motion.button>
       )}
       
+      {/* Cards */}
       <div className="w-full h-full absolute inset-0 z-20">
         {springs.map((spring, i) => {
           const relPos = getRelativePosition(i);
@@ -188,8 +155,8 @@ const StoryView: React.FC = () => {
               }}
             >
               <div style={{ position: 'relative' }}>
-                {i === cards.length - 1 - [...gone].length && (
-                  <CardText text={cards[i].text} linkie={cards[i].linkie} isHorizontal={cards[i].is_horizontal} />
+                {i === cards.indexOf(currentCard) && currentCard && (
+                  <CardText text={currentCard.text} linkie={currentCard.linkie} isHorizontal={currentCard.is_horizontal} />
                 )}
                 <Card
                   card={cards[i]}
@@ -203,26 +170,19 @@ const StoryView: React.FC = () => {
         })}
       </div>
 
-      {/* Add CommentInput below the cards */}
+      {/* Comment Input */}
       <div className="absolute bottom-16 left-0 right-0 z-20">
-        {cards.length > 0 && !allCardsSwiped && cards[cards.length - 1 - [...gone].length] && (
+        {cards.length > 0 && !allCardsSwiped && currentCard && (
           <CommentInput 
-            cardId={cards[cards.length - 1 - [...gone].length].card_id} 
+            cardId={currentCard.card_id} 
             isSubmitting={isAnimating}
-            onSubmitSuccess={() => {
-              console.log('Comment submitted successfully');
-            }}
-            onSubmittingChange={(submitting) => {
-              if (submitting) {
-                const currentCardIndex = cards.length - 1 - [...gone].length;
-                swipeCard(currentCardIndex, 1);
-              }
-            }}
+            onSubmitSuccess={handleCommentSubmit}
+            onSubmittingChange={handleSubmittingChange}
           />
         )}
       </div>
 
-      {/* Update Start Over button styling and position */}
+      {/* Start Over button */}
       {allCardsSwiped && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -249,7 +209,7 @@ const StoryView: React.FC = () => {
         </motion.div>
       )}
 
-      {/* Add entries */}
+      {/* Entries */}
       {!allCardsSwiped && currentCard && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           {entryStates.map((state, index) => (
