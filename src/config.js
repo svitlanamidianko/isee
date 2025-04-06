@@ -1,9 +1,9 @@
 // Backend API configuration
 console.log('All env variables:', process.env);
-console.log('NEXT_PUBLIC_USE_STAGING value:', process.env.NEXT_PUBLIC_USE_STAGING);
-console.log('Type of NEXT_PUBLIC_USE_STAGING:', typeof process.env.NEXT_PUBLIC_USE_STAGING);
+console.log('REACT_APP_USE_STAGING value:', process.env.REACT_APP_USE_STAGING);
+console.log('Type of REACT_APP_USE_STAGING:', typeof process.env.REACT_APP_USE_STAGING);
 
-const isStaging = process.env.NEXT_PUBLIC_USE_STAGING === 'true';
+const isStaging = process.env.REACT_APP_USE_STAGING === 'true';
 console.log('isStaging evaluated to:', isStaging);
 
 export const API_BASE_URL = isStaging 
