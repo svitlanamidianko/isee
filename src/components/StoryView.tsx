@@ -203,7 +203,7 @@ const createToFunction = (cards: Card[]) => {
     
     return {
       x: 0,
-      y: i * -8,
+      y: 0, // Remove vertical offset
       scale,
       rot,
       delay: i * 100,
@@ -614,7 +614,7 @@ const StoryView: React.FC = () => {
           
           return {
             x: 0,
-            y: relPos * -8,
+            y: 0, // Remove vertical offset
             scale: relPos === 0 ? 1 : relPos === 1 ? 0.5 : Math.max(0.2, 0.5 - (relPos - 1) * 0.05),
             rot,
             config: { friction: 50, tension: 200 },

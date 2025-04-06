@@ -26,7 +26,7 @@ export const useCardAnimation = ({ api, cards }: UseCardAnimationProps) => {
       
       const animationConfig = {
         x: 0,
-        y: i * -8,
+        y: 0,
         scale: relPos === cards.length - 1 ? 1 : relPos === cards.length - 2 ? 0.5 : Math.max(0.2, 0.5 - ((cards.length - 1 - relPos) - 1) * 0.05),
         rot,
         delay: i * 200,
