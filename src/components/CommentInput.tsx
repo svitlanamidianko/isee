@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { API_ENDPOINTS } from '../config';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface CommentInputProps {
   cardId: string;
@@ -18,6 +19,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
   const [comment, setComment] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingEntry, setIsSubmittingEntry] = useState(false);
+  const isMobile = useIsMobile();
 
   // Clear comment when cardId changes
   useEffect(() => {
@@ -44,7 +46,6 @@ const CommentInput: React.FC<CommentInputProps> = ({
         throw new Error('Failed to submit comment');
       }
 
-      // Only trigger success callback and swipe after successful submission
       if (onSubmitSuccess) {
         onSubmitSuccess();
       }
@@ -59,7 +60,6 @@ const CommentInput: React.FC<CommentInputProps> = ({
     }
   };
 
-  // Auto-submit when isSubmitting becomes true
   useEffect(() => {
     if (isSubmitting && !isSubmittingEntry) {
       submitComment();
@@ -68,7 +68,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
 
   return (
     <motion.div 
-      className="w-full max-w-md mx-auto"
+      className={`w-full ${isMobile ? 'max-w-[90%]' : 'max-w-md'} mx-auto`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -89,7 +89,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
           placeholder="what do you see?"
           className="w-full lowercase bg-transparent border-b border-white/20 
                    text-white placeholder-white focus:outline-none focus:border-white/40
-                   font-[Papyrus] text-[30px] text-center placeholder:text-center
+                   font-[Papyrus] text-center placeholder:text-center
                    tracking-wider placeholder:tracking-wider
                    transition-all duration-300 ease-in-out
                    hover:border-white/40 focus:border-white/60
@@ -97,6 +97,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
                    pb-0 -mb-1"
           style={{
             fontFamily: 'Papyrus, fantasy',
+            fontSize: isMobile ? '20px' : '30px',
             textShadow: '0 0 10px rgba(255,255,255,0.3)'
           }}
           disabled={isSubmittingEntry}

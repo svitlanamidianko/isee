@@ -11,9 +11,11 @@ import LoadingView from './LoadingView';
 import ErrorView from './ErrorView';
 import { useStoryView } from '../hooks/useStoryView';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
+import useIsMobile from '../hooks/useIsMobile';
 import './StoryView.css';
 
 const StoryView: React.FC = () => {
+  const isMobile = useIsMobile();
   const sceneRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
   
@@ -112,7 +114,7 @@ const StoryView: React.FC = () => {
                    hover:scale-110"
           style={{ 
             fontFamily: 'Papyrus',
-            fontSize: '1.75rem',
+            fontSize: isMobile ? '1.25rem' : '1.75rem',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
@@ -141,7 +143,7 @@ const StoryView: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginTop: '40px',
+                marginTop: isMobile ? '0px' : '40px',
                 overflow: 'visible', 
                 opacity: allCardsSwiped ? 0 : 1,
                 transition: 'opacity 0.5s ease-out',
@@ -166,7 +168,7 @@ const StoryView: React.FC = () => {
       </div>
 
       {/* Comment Input */}
-      <div className="absolute bottom-16 left-0 right-0 z-20">
+      <div className={`absolute ${isMobile ? 'bottom-4' : 'bottom-16'} left-0 right-0 z-20`}>
         {cards.length > 0 && !allCardsSwiped && currentCard && (
           <CommentInput 
             cardId={currentCard.card_id} 
@@ -193,7 +195,8 @@ const StoryView: React.FC = () => {
             style={{
               fontFamily: 'Papyrus',
               textTransform: 'lowercase',
-              letterSpacing: '0.05em'
+              letterSpacing: '0.05em',
+              fontSize: isMobile ? '1.5rem' : '2rem'
             }}
             className="bg-white/30 hover:bg-white/40 text-white py-6 px-12 rounded-xl
                      backdrop-blur-md border-2 border-white/40 transition-all duration-300
@@ -204,8 +207,8 @@ const StoryView: React.FC = () => {
         </motion.div>
       )}
 
-      {/* Entries */}
-      {!allCardsSwiped && currentCard && (
+      {/* Entries - Only show on desktop */}
+      {!isMobile && !allCardsSwiped && currentCard && (
         <div className="absolute inset-0 z-30 pointer-events-none">
           {entryStates.map((state, index) => (
             <Entry

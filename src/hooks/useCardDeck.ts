@@ -25,7 +25,6 @@ const to = (i: number, cards: Card[], gone: Set<number>) => {
   const topPos = cards.length - 1 - gone.size;
   const scale = i === topPos ? 1 : i === topPos - 1 ? 0.5 : Math.max(0.2, 0.5 - (topPos - i - 1) * 0.05);
   
-  // Generate unique rotation
   const maxTilt = 6;
   const rot = (Math.random() * 2 - 1) * maxTilt;
   
@@ -34,12 +33,12 @@ const to = (i: number, cards: Card[], gone: Set<number>) => {
     y: 0,
     scale,
     rot,
-    delay: i * 100,
+    delay: i * 50,
     config: {
-      mass: 1,
+      mass: 1.2,
       tension: 180,
-      friction: 50,
-      precision: 0.001
+      friction: 45,
+      precision: 0.01
     }
   };
 };
@@ -103,9 +102,8 @@ export const useCardDeck = (initialCards: Card[]) => {
   const swipeCard = useCallback((index: number, direction: number) => {
     if (isAnimating || cards.length === 0 || index !== currentCardIndex) return;
 
-    // Reduce cooldown time for keyboard navigation
     const now = Date.now();
-    const minSwipeInterval = 50;
+    const minSwipeInterval = 30;
     if (now - lastSwipeTime.current < minSwipeInterval) return;
     lastSwipeTime.current = now;
 
@@ -121,10 +119,10 @@ export const useCardDeck = (initialCards: Card[]) => {
           return {
             ...to(i, cards, gone),
             config: {
-              mass: 1,
+              mass: 1.2,
               tension: 180,
-              friction: 50,
-              precision: 0.001
+              friction: 45,
+              precision: 0.01
             }
           };
         }
@@ -140,13 +138,12 @@ export const useCardDeck = (initialCards: Card[]) => {
         scale: 1,
         delay: undefined,
         config: { 
-          friction: 80,
-          tension: 120,
+          friction: 60,
+          tension: 150,
           mass: 1.2,
-          precision: 0.001
+          precision: 0.01
         },
         onRest: () => {
-          // Reset isAnimating immediately after the swipe animation
           setIsAnimating(false);
           if (gone.size === cards.length) {
             setAllCardsSwiped(true);
@@ -155,10 +152,9 @@ export const useCardDeck = (initialCards: Card[]) => {
       };
     });
 
-    // Allow next swipe sooner by resetting isAnimating after a shorter delay
     setTimeout(() => {
       setIsAnimating(false);
-    }, 100);
+    }, 50);
 
   }, [isAnimating, cards, gone, api, getRelativePosition, currentCardIndex]);
 

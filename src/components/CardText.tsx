@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import useIsMobile from '../hooks/useIsMobile';
 
 interface CardTextProps {
   text: string;
@@ -8,6 +9,8 @@ interface CardTextProps {
 }
 
 const CardText: React.FC<CardTextProps> = ({ text, linkie, isHorizontal }) => {
+  const isMobile = useIsMobile();
+  
   if (!text && !linkie) return null;
 
   return (
@@ -18,9 +21,10 @@ const CardText: React.FC<CardTextProps> = ({ text, linkie, isHorizontal }) => {
         width: '100%',
         left: 0,
         right: 0,
-        bottom: 'calc(100% + 2rem)',
+        bottom: isMobile ? 'calc(100% + 1rem)' : 'calc(100% + 2rem)',
         zIndex: 100,
-        margin: '0 auto'
+        margin: '0 auto',
+        padding: isMobile ? '0 1rem' : '0'
       }}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -33,7 +37,9 @@ const CardText: React.FC<CardTextProps> = ({ text, linkie, isHorizontal }) => {
             fontFamily: 'Papyrus',
             textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
             margin: '0 auto',
-            fontSize: isHorizontal ? '1.875rem' : '1.55rem'
+            fontSize: isMobile 
+              ? (isHorizontal ? '1.25rem' : '1.1rem')
+              : (isHorizontal ? '1.875rem' : '1.55rem')
           }}
         >
           {text}
@@ -47,7 +53,8 @@ const CardText: React.FC<CardTextProps> = ({ text, linkie, isHorizontal }) => {
           className="text-sm transition-colors z-50"
           style={{ 
             color: '#3A225E',
-            display: 'inline-block'
+            display: 'inline-block',
+            fontSize: isMobile ? '0.75rem' : '0.875rem'
           }}
           onMouseEnter={(e) => e.currentTarget.style.color = '#4A326E'}
           onMouseLeave={(e) => e.currentTarget.style.color = '#3A225E'}
