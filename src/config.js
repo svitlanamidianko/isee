@@ -1,10 +1,10 @@
 // Backend API configuration
-console.log('All env variables:', process.env);
-console.log('REACT_APP_USE_STAGING value:', process.env.REACT_APP_USE_STAGING);
-console.log('Type of REACT_APP_USE_STAGING:', typeof process.env.REACT_APP_USE_STAGING);
+const ENV = process.env.NODE_ENV || 'development';
+console.log('Current environment:', ENV);
 
-const isStaging = process.env.REACT_APP_USE_STAGING === 'true';
-console.log('isStaging evaluated to:', isStaging);
+// Force staging in production
+const isStaging = ENV === 'production' ? true : process.env.REACT_APP_USE_STAGING === 'true';
+console.log('isStaging forced to:', isStaging);
 
 export const API_BASE_URL = isStaging 
   ? 'https://isee-api-staging-twilight-grass-3635.fly.dev'
