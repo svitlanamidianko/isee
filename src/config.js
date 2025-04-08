@@ -2,9 +2,9 @@
 const ENV = import.meta.env.MODE || 'development';
 console.log('Current environment:', ENV);
 
-// Force staging in production
-const isStaging = ENV === 'production' ? true : import.meta.env.VITE_USE_STAGING === 'true';
-console.log('isStaging forced to:', isStaging);
+// Use staging based on environment variable
+const isStaging = import.meta.env.VITE_USE_STAGING === 'true';
+console.log('isStaging:', isStaging);
 
 export const API_BASE_URL = isStaging 
   ? 'https://isee-api-staging-twilight-grass-3635.fly.dev'
