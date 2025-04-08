@@ -6,10 +6,18 @@ console.log('Current environment:', ENV);
 const isStaging = import.meta.env.VITE_USE_STAGING === 'true';
 console.log('isStaging:', isStaging);
 
-export const API_BASE_URL = isStaging 
-  ? 'https://isee-api-staging-twilight-grass-3635.fly.dev'
-  : 'http://localhost:5000';
+// Determine API URL based on environment
+let API_BASE_URL;
+if (isStaging) {
+  API_BASE_URL = 'https://isee-api-staging-twilight-grass-3635.fly.dev';
+} else if (ENV === 'production') {
+  API_BASE_URL = 'https://isee-api-staging-twilight-grass-3635.fly.dev/';  // Replace with your production API URL
+} else {
+  API_BASE_URL = 'http://localhost:5000';
+}
 console.log('Using API_BASE_URL:', API_BASE_URL);
+
+export { API_BASE_URL };
 
 // API endpoints
 export const API_ENDPOINTS = {
