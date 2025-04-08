@@ -32,10 +32,20 @@ export const useEntries = (card: Card | null) => {
 
   // Calculate dimensions based on text length
   const calculateDimensions = useCallback((text: string) => {
-    const constantWidth = 160;
+    // Base width for normal text, wider for longer text
+    const baseWidth = 160;
+    const maxWidth = 300;  // Maximum width we'll allow
+    const textLength = text.length;
+    
+    // Scale width based on text length, but cap it at maxWidth
+    const scaledWidth = Math.min(
+      maxWidth,
+      baseWidth + (textLength > 100 ? (textLength - 100) * 0.5 : 0)  // Add 0.5px width per character over 100
+    );
+    
     const fontSize = 18;
     const lineHeight = fontSize * 1.4;
-    const avgCharsPerLine = constantWidth / (fontSize * 0.5);
+    const avgCharsPerLine = scaledWidth / (fontSize * 0.5);
     
     const words = text.split(' ');
     let lines = 1;
@@ -56,7 +66,7 @@ export const useEntries = (card: Card | null) => {
     const variation = (Math.random() * 10) + 10;
     
     return {
-      width: constantWidth,
+      width: Math.floor(scaledWidth),
       height: Math.floor(Math.max(minHeight, textHeight + paddingVertical + variation))
     };
   }, []);

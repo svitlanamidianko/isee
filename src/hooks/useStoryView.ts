@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, MutableRefObject } from 'react';
 import { API_ENDPOINTS } from '../config';
 import { useCardDeck } from './useCardDeck';
 import { useEntries } from './useEntries';
@@ -14,8 +14,12 @@ interface Card {
   is_horizontal: boolean;
 }
 
-export const useStoryView = () => {
-  const [hasAccess, setHasAccess] = useState(true);
+interface UseStoryViewProps {
+  videoRefs: MutableRefObject<{ [key: string]: HTMLVideoElement | null }>;
+}
+
+export const useStoryView = ({ videoRefs }: UseStoryViewProps) => {
+  const [hasAccess, setHasAccess] = useState(false);
   const [cards, setCards] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,13 +31,27 @@ export const useStoryView = () => {
     gone,
     isAnimating,
     allCardsSwiped,
-    swipeCard,
+    swipeCard: baseSwipeCard,
     goBack,
     reset,
     getRelativePosition,
     api,
     currentCard
   } = useCardDeck(cards);
+
+  // Enhanced swipeCard that handles video pausing
+  const swipeCard = useCallback((index: number, direction: number) => {
+    // First, pause any playing video on the current card
+    if (currentCard && videoRefs.current[currentCard.card_id]) {
+      const videoRef = videoRefs.current[currentCard.card_id];
+      if (videoRef && !videoRef.paused) {
+        videoRef.pause();
+      }
+    }
+    
+    // Then proceed with the swipe
+    baseSwipeCard(index, direction);
+  }, [currentCard, videoRefs, baseSwipeCard]);
 
   // Use entries hook with current card
   const entryStates = useEntries(currentCard);

@@ -46,6 +46,7 @@ const CommentInput: React.FC<CommentInputProps> = ({
         throw new Error('Failed to submit comment');
       }
 
+      // Only call onSubmitSuccess after successful submission
       if (onSubmitSuccess) {
         onSubmitSuccess();
       }
@@ -60,8 +61,9 @@ const CommentInput: React.FC<CommentInputProps> = ({
     }
   };
 
+  // Handle external submission trigger
   useEffect(() => {
-    if (isSubmitting && !isSubmittingEntry) {
+    if (isSubmitting && !isSubmittingEntry && comment.trim()) {
       submitComment();
     }
   }, [isSubmitting]);
@@ -81,13 +83,13 @@ const CommentInput: React.FC<CommentInputProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              if (onSubmittingChange && !isSubmittingEntry) {
-                onSubmittingChange(true);
+              if (!isSubmittingEntry) {
+                submitComment();
               }
             }
           }}
           placeholder="what do you see?"
-          className="w-full lowercase bg-transparent border-b border-white/20 
+          className="w-full bg-transparent border-b border-white/20 
                    text-white placeholder-white focus:outline-none focus:border-white/40
                    font-[Papyrus] text-center placeholder:text-center
                    tracking-wider placeholder:tracking-wider

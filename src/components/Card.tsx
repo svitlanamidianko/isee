@@ -13,14 +13,14 @@ interface CardProps {
   style: any;
   bind: (...args: any[]) => any;
   videoRefs: React.MutableRefObject<{ [key: string]: HTMLVideoElement | null }>;
+  index: number;
 }
 
-const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs }) => {
+const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs, index }) => {
   const isMobile = useIsMobile();
   
-  // Prevent default drag behavior
-  const preventDrag = (e: React.DragEvent) => {
-    e.preventDefault();
+  // Handle drag without preventDefault
+  const handleDrag = (e: React.DragEvent) => {
     return false;
   };
 
@@ -72,7 +72,7 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs }) => {
 
   return (
     <animated.div
-      {...bind()}
+      {...bind(index)}
       style={{
         ...style,
         backgroundColor: 'white',
@@ -84,30 +84,41 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs }) => {
         willChange: 'transform',
         backfaceVisibility: 'hidden',
         transformStyle: 'preserve-3d',
-        margin: isMobile && card.is_horizontal ? '0 auto' : undefined
+        margin: isMobile && card.is_horizontal ? '0 auto' : undefined,
+        touchAction: 'none',
+        cursor: 'grab',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none'
       }}
-      onDragStart={preventDrag}
+      onDragStart={handleDrag}
+      draggable={false}
     >
       {card.card_url.match(/\.(mov|mp4)$/i) ? (
         <div 
           style={{ position: 'relative', width: '100%', height: '100%' }}
           onClick={handleVideoClick}
-          onDragStart={preventDrag}
+          onDragStart={handleDrag}
+          draggable={false}
         >
           <video
-            ref={el => videoRefs.current[card.card_id] = el}
+            ref={el => {
+              videoRefs.current[card.card_id] = el;
+            }}
             src={`${API_BASE_URL}${card.card_url}`}
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              willChange: 'transform'
+              willChange: 'transform',
+              pointerEvents: 'none'
             }}
             loop
-            muted={false}
+            muted={true}
             playsInline
-            draggable="false"
-            onDragStart={preventDrag}
+            draggable={false}
+            preload="none"
           />
         </div>
       ) : (
@@ -117,11 +128,13 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs }) => {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            willChange: 'transform'
+            willChange: 'transform',
+            pointerEvents: 'none'
           }}
           alt={card.card_name}
-          draggable="false"
-          onDragStart={preventDrag}
+          draggable={false}
+          loading="lazy"
+          decoding="async"
         />
       )}
     </animated.div>

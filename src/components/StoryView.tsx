@@ -40,7 +40,7 @@ const StoryView: React.FC = () => {
     handleSubmittingChange,
     retryFetch,
     isSubmittingEntry
-  } = useStoryView();
+  } = useStoryView({ videoRefs });
 
   // Use keyboard navigation
   useKeyboardNavigation({
@@ -49,37 +49,80 @@ const StoryView: React.FC = () => {
     currentCardIndex: currentCard ? cards.indexOf(currentCard) : -1,
     cardsLength: cards.length,
     swipeCard,
-    goBack
+    goBack,
+    onSubmittingChange: handleSubmittingChange,
+    onSubmitSuccess: handleCommentSubmit
   });
 
   // Add the bind function from useDrag
-  const bind = useDrag(({ args: [index], active, movement: [mx], direction: [xDir], velocity }) => {
-    if (isAnimating) return;
-    
-    if (!currentCard || index !== cards.indexOf(currentCard)) return;
-    
-    const trigger = Math.abs(mx) > 100 || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > 0.2;
-    const dir = xDir < 0 ? -1 : 1;
-    
-    // Update card position during drag
-    api.start((i: number) => {
-      if (index !== i) return;
+  const bind = useDrag(
+    async ({ args: [index], active, movement: [mx], direction: [xDir], velocity, type, event }) => {
+      console.log('Drag event:', { index, active, mx, xDir, velocity, type });  // Debug log
       
-      // Calculate rotation based on movement
-      const rot = mx / 100 + (dir * 2 * Math.sign(mx));
+      if (isAnimating) {
+        console.log('Animation in progress, ignoring drag');
+        return;
+      }
       
-      return {
-        x: active ? mx : 0,
-        rot: active ? rot : 0,
-        scale: 1,
-        config: { friction: active ? 50 : 40, tension: active ? 300 : 500 }
-      };
-    });
-    
-    if (!active && trigger) {
-      swipeCard(index, dir);
+      if (!currentCard || index !== cards.indexOf(currentCard)) {
+        console.log('Invalid card index or no current card');
+        return;
+      }
+      
+      // Make the trigger threshold smaller for desktop
+      const triggerThreshold = type === 'touch' ? 100 : 50;
+      const velocityThreshold = type === 'touch' ? 0.2 : 0.1;
+      const trigger = Math.abs(mx) > triggerThreshold || Math.sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]) > velocityThreshold;
+      const dir = xDir < 0 ? -1 : 1;
+      
+      // Update card position during drag
+      api.start((i: number) => {
+        if (index !== i) return;
+        
+        // Calculate rotation based on movement
+        const rot = (mx / 100) * (type === 'touch' ? 1 : 2) + (dir * 2 * Math.sign(mx));
+        
+        const config = {
+          x: active ? mx : 0,
+          rot: active ? rot : 0,
+          scale: active ? 1 : 0.95,
+          config: { 
+            friction: active ? 25 : 40,  // Lower friction for more responsive movement
+            tension: active ? 200 : 500,  // Lower tension for more responsive movement
+            mass: 1
+          }
+        };
+        
+        console.log('Updating spring:', config);  // Debug log
+        return config;
+      });
+      
+      if (!active && trigger) {
+        console.log('Triggering swipe:', { dir });  // Debug log
+        
+        // First trigger comment submission
+        if (handleSubmittingChange) {
+          handleSubmittingChange(true);
+          // Wait for submission to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          // Reset submitting state
+          handleSubmittingChange(false);
+        }
+        
+        // Then swipe the card
+        swipeCard(index, dir);
+      }
+    },
+    {
+      filterTaps: true,
+      bounds: { left: -1000, right: 1000 },
+      rubberband: true,
+      axis: 'x',
+      pointer: { mouse: true, touch: true },
+      preventScroll: true,
+      preventScrollAxis: 'x'
     }
-  });
+  );
 
   if (!hasAccess) {
     return <IntroPage onAccessGranted={() => setHasAccess(true)} />;
@@ -130,6 +173,11 @@ const StoryView: React.FC = () => {
         {springs.map((spring, i) => {
           const relPos = getRelativePosition(i);
           const zIndex = 1000 - (relPos >= 0 ? relPos : 1000);
+          
+          // Only render current card and next card
+          if (!currentCard || (i !== cards.indexOf(currentCard) && i !== cards.indexOf(currentCard) + 1)) {
+            return null;
+          }
 
           return (
             <animated.div 
@@ -153,13 +201,18 @@ const StoryView: React.FC = () => {
             >
               <div style={{ position: 'relative' }}>
                 {i === cards.indexOf(currentCard) && currentCard && (
-                  <CardText text={currentCard.text} linkie={currentCard.linkie} isHorizontal={currentCard.is_horizontal} />
+                  <CardText 
+                    text={currentCard?.text || ''} 
+                    linkie={currentCard?.linkie || ''} 
+                    isHorizontal={currentCard?.is_horizontal || false} 
+                  />
                 )}
                 <Card
                   card={cards[i]}
                   style={spring}
                   bind={bind}
                   videoRefs={videoRefs}
+                  index={i}
                 />
               </div>
             </animated.div>

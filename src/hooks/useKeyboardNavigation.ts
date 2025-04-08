@@ -7,6 +7,8 @@ interface UseKeyboardNavigationProps {
   cardsLength: number;
   swipeCard: (index: number, direction: number) => void;
   goBack: () => void;
+  onSubmittingChange?: (isSubmitting: boolean) => void;
+  onSubmitSuccess?: () => void;
 }
 
 export const useKeyboardNavigation = ({
@@ -15,13 +17,22 @@ export const useKeyboardNavigation = ({
   currentCardIndex,
   cardsLength,
   swipeCard,
-  goBack
+  goBack,
+  onSubmittingChange,
+  onSubmitSuccess
 }: UseKeyboardNavigationProps) => {
   useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
+    const handleKeyPress = async (event: KeyboardEvent) => {
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         if (currentCardIndex >= 0 && !isAnimating) {
+          // First trigger comment submission
+          if (onSubmittingChange) {
+            onSubmittingChange(true);
+            // Wait for submission to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          // Then swipe the card
           swipeCard(currentCardIndex, 1);
         }
       } else if (event.key === 'ArrowLeft') {
@@ -37,5 +48,5 @@ export const useKeyboardNavigation = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isAnimating, currentCardIndex, cardsLength, swipeCard, goBack, sceneRef]);
+  }, [isAnimating, currentCardIndex, cardsLength, swipeCard, goBack, sceneRef, onSubmittingChange, onSubmitSuccess]);
 }; 
