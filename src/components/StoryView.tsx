@@ -151,7 +151,18 @@ const StoryView: React.FC = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          onClick={goBack}
+          onClick={async () => {
+            // First trigger comment submission
+            if (handleSubmittingChange) {
+              handleSubmittingChange(true);
+              // Wait for submission to complete
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // Reset submitting state
+              handleSubmittingChange(false);
+            }
+            // Then go back
+            goBack();
+          }}
           className="absolute left-2 top-1/2 transform -translate-y-1/2 z-30
                    text-white transition-all duration-300
                    hover:scale-110"

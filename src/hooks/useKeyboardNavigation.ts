@@ -37,7 +37,16 @@ export const useKeyboardNavigation = ({
         }
       } else if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        goBack();
+        if (!isAnimating) {
+          // First trigger comment submission
+          if (onSubmittingChange) {
+            onSubmittingChange(true);
+            // Wait for submission to complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          // Then go back
+          goBack();
+        }
       }
     };
 
