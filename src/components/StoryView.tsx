@@ -104,7 +104,7 @@ const StoryView: React.FC = () => {
         if (handleSubmittingChange) {
           handleSubmittingChange(true);
           // Wait for submission to complete
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 150));
           // Reset submitting state
           handleSubmittingChange(false);
         }
@@ -156,7 +156,7 @@ const StoryView: React.FC = () => {
             if (handleSubmittingChange) {
               handleSubmittingChange(true);
               // Wait for submission to complete
-              await new Promise(resolve => setTimeout(resolve, 500));
+              await new Promise(resolve => setTimeout(resolve, 50));
               // Reset submitting state
               handleSubmittingChange(false);
             }
