@@ -125,7 +125,7 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs, index })
             muted={true}
             playsInline
             draggable={false}
-            preload="none"
+            preload="auto"
           />
         </div>
       ) : (
