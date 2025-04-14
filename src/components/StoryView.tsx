@@ -179,6 +179,45 @@ const StoryView: React.FC = () => {
         </motion.button>
       )}
       
+      {/* Forward arrow button */}
+      {!isAnimating && !allCardsSwiped && currentCard && (
+        <motion.button
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          onClick={async () => {
+            // First trigger comment submission
+            if (handleSubmittingChange) {
+              handleSubmittingChange(true);
+              // Wait for submission to complete
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // Reset submitting state
+              handleSubmittingChange(false);
+            }
+            // Then swipe the card
+            if (currentCard) {
+              const currentIndex = cards.indexOf(currentCard);
+              if (currentIndex !== -1) {
+                swipeCard(currentIndex, 1);
+              }
+            }
+          }}
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 z-30
+                   text-white transition-all duration-300
+                   hover:scale-110"
+          style={{ 
+            fontFamily: 'Papyrus',
+            fontSize: isMobile ? '1.25rem' : '1.75rem',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}
+        >
+          →
+        </motion.button>
+      )}
+      
       {/* Cards */}
       <div className="w-full h-full absolute inset-0 z-20">
         {springs.map((spring, i) => {
