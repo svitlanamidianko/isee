@@ -41,7 +41,7 @@ const IntroPage: React.FC<IntroPageProps> = ({ onAccessGranted }) => {
             />
           </div>
           {error && (
-            <p className="text-red-300 text-sm text-center" style={{ fontFamily: 'Papyrus' }}>{error}</p>
+            <p className="text-white text-sm text-center" style={{ fontFamily: 'Papyrus' }}>{error}</p>
           )}
           <button
             type="submit"

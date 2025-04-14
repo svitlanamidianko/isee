@@ -1,4 +1,4 @@
-import React, { useRef, memo } from 'react';
+import React, { useRef, memo, useState } from 'react'; // Add useState
 import { animated } from '@react-spring/web';
 import { API_BASE_URL } from '../config';
 import useIsMobile from '../hooks/useIsMobile';
@@ -23,6 +23,8 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs, index })
   const handleDrag = (e: React.DragEvent) => {
     return false;
   };
+
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const handleVideoClick = () => {
     const videoRef = videoRefs.current[card.card_id];
@@ -75,10 +77,12 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs, index })
       {...bind(index)}
       style={{
         ...style,
-        backgroundColor: 'white',
+        backgroundColor: 'transparent',
         ...cardDimensions,
         borderRadius: isMobile ? '0px' : '10px',
-        boxShadow: '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)',
+        boxShadow: imageLoaded
+          ? '0 12.5px 100px -10px rgba(50, 50, 73, 0.4), 0 10px 10px -10px rgba(50, 50, 73, 0.3)'
+          : 'none',
         overflow: 'hidden',
         position: 'relative',
         willChange: 'transform',
@@ -107,34 +111,40 @@ const Card: React.FC<CardProps> = memo(({ card, style, bind, videoRefs, index })
               videoRefs.current[card.card_id] = el;
             }}
             src={`${API_BASE_URL}${card.card_url}`}
+            onCanPlayThrough={() => setImageLoaded(true)} // <-- change this
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
               willChange: 'transform',
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              opacity: imageLoaded ? 1 : 0,
+              transition: 'opacity 0.5s ease-out'
             }}
             loop
             muted={true}
             playsInline
             draggable={false}
-            preload="none"
+            preload="auto"
           />
         </div>
       ) : (
         <img
-          src={`${API_BASE_URL}${card.card_url}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            willChange: 'transform',
-            pointerEvents: 'none'
-          }}
-          alt={card.card_name}
-          draggable={false}
-          loading="lazy"
-          decoding="async"
+        src={`${API_BASE_URL}${card.card_url}`}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          willChange: 'transform',
+          pointerEvents: 'none',
+          opacity: imageLoaded ? 1 : 0,
+          transition: 'opacity 0.5s ease-out'
+        }}
+        alt={card.card_name}
+        draggable={false}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setImageLoaded(true)}
         />
       )}
     </animated.div>

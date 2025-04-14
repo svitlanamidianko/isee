@@ -30,7 +30,7 @@ export const useKeyboardNavigation = ({
           if (onSubmittingChange) {
             onSubmittingChange(true);
             // Wait for submission to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 150));
           }
           // Then swipe the card
           swipeCard(currentCardIndex, 1);
@@ -42,7 +42,7 @@ export const useKeyboardNavigation = ({
           if (onSubmittingChange) {
             onSubmittingChange(true);
             // Wait for submission to complete
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 150));
           }
           // Then go back
           goBack();

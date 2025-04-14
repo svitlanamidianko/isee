@@ -33,7 +33,7 @@ const to = (i: number, cards: Card[], gone: Set<number>) => {
     y: 0,
     scale,
     rot,
-    delay: i * 50,
+    delay: 0,
     config: {
       mass: 1.2,
       tension: 180,
@@ -225,7 +225,7 @@ export const useCardDeck = (initialCards: Card[]) => {
     // Allow next action sooner
     setTimeout(() => {
       setIsAnimating(false);
-    }, 100);
+    }, 50);
     
   }, [isAnimating, gone, api, swipeOrder, cards, currentCardIndex]);
 

@@ -164,9 +164,9 @@ export const useEntries = (card: Card | null) => {
             }
             return newStates;
           });
-        }, i * 800 + Math.random() * 400); // Increased delay between entries (800ms base + random 0-400ms)
+        }, i * 8 + Math.random() * 4); // Increased delay between entries (800ms base + random 0-400ms)
       });
-    }, 3000); // 3 second initial delay
+    }, 50); // 50 millisecond initial delay
 
     // Cleanup function to clear timeout if component unmounts or card changes
     return () => {
