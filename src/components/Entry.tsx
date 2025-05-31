@@ -1,3 +1,4 @@
+console.log('Entry component file loaded');
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -8,7 +9,32 @@ interface EntryProps {
   opacity: number;
 }
 
+// Function to detect URLs in text
+const detectAndReplaceUrl = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-300 hover:text-blue-400 underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          [link]
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
 const Entry: React.FC<EntryProps> = ({ text, position, dimensions, opacity }) => {
+  console.log('Entry text:', text);
   return (
     <motion.div
       initial={{ 
@@ -51,7 +77,7 @@ const Entry: React.FC<EntryProps> = ({ text, position, dimensions, opacity }) =>
           letterSpacing: '0.02em'
         }}
       >
-        {text}
+        {detectAndReplaceUrl(text)}
       </div>
     </motion.div>
   );

@@ -77,11 +77,25 @@ export const useCardDeck = (initialCards: Card[]) => {
       setIsAnimating(false);
       setAllCardsSwiped(false);
       
+      // First set all cards to their initial positions
       api.start(i => ({
-        ...to(i, initialCards, gone),
-        from: from(i),
-        immediate: false
+        ...from(i),
+        immediate: true
       }));
+
+      // Then animate them to their final positions
+      setTimeout(() => {
+        api.start(i => ({
+          ...to(i, initialCards, gone),
+          immediate: false,
+          config: {
+            mass: 1.2,
+            tension: 180,
+            friction: 45,
+            precision: 0.01
+          }
+        }));
+      }, 50);
     }
   }, [initialCards, api, gone]);
 

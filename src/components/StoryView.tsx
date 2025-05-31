@@ -1,6 +1,6 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { useDrag } from '@use-gesture/react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { animated } from '@react-spring/web';
 import CommentInput from './CommentInput';
 import IntroPage from './IntroPage';
@@ -251,10 +251,10 @@ const StoryView: React.FC = () => {
             >
               <div style={{ position: 'relative' }}>
                 {i === cards.indexOf(currentCard) && currentCard && (
-                  <CardText 
-                    text={currentCard?.text || ''} 
-                    linkie={currentCard?.linkie || ''} 
-                    isHorizontal={currentCard?.is_horizontal || false} 
+                  <CardText
+                    text={currentCard?.text || ''}
+                    linkie={currentCard?.linkie || ''}
+                    isHorizontal={currentCard?.is_horizontal || false}
                   />
                 )}
                 <Card
@@ -312,18 +312,152 @@ const StoryView: React.FC = () => {
 
       {/* Entries - Only show on desktop */}
       {!isMobile && !allCardsSwiped && currentCard && (
-        <div className="absolute inset-0 z-30 pointer-events-none">
-          {entryStates.map((state, index) => (
-            <Entry
-              key={`entry-${index}-${currentCard.card_id}`}
-              text={state.text}
-              position={state.position}
-              dimensions={state.dimensions}
-              opacity={state.opacity}
-            />
-          ))}
-        </div>
+        <EntryBubblesLoop entryStates={entryStates} cardId={currentCard.card_id} />
       )}
+    </div>
+  );
+};
+
+const MAX_VISIBLE = 2;      // Show up to 2 bubbles at a time
+const STAGGER = 3000;       // 3 seconds between new bubbles appearing
+const DISPLAY_TIME = 6000;  // 6 seconds each bubble stays
+const FADE_DURATION = 2000; // 2 seconds fade in/out duration
+
+interface EntryBubblesLoopProps {
+  entryStates: Array<{
+    text: string;
+    position: { x: number; y: number };
+    dimensions: { width: number; height: number };
+    opacity: number;
+  }>;
+  cardId: string;
+}
+
+const EntryBubblesLoop: React.FC<EntryBubblesLoopProps> = ({ entryStates, cardId }) => {
+  const [visible, setVisible] = useState<Array<{ idx: number; key: string }>>([]);
+  const nextIdx = useRef(0);
+  const animationRef = useRef<NodeJS.Timeout>();
+
+  // Reset animation when card changes
+  useEffect(() => {
+    setVisible([]);
+    nextIdx.current = 0;
+    if (animationRef.current) {
+      clearInterval(animationRef.current);
+    }
+    
+    if (!entryStates || entryStates.length === 0) return;
+
+    // Helper to add a bubble
+    const addBubble = () => {
+      setVisible(prev => {
+        // Remove oldest if at max
+        const newArr = prev.length >= MAX_VISIBLE ? prev.slice(1) : prev.slice();
+        newArr.push({
+          idx: nextIdx.current,
+          key: `${cardId}-${nextIdx.current}-${Date.now()}`
+        });
+        nextIdx.current = (nextIdx.current + 1) % entryStates.length;
+        return newArr;
+      });
+    };
+
+    // Start with first bubble
+    addBubble();
+
+    // Add a new bubble every STAGGER ms
+    animationRef.current = setInterval(addBubble, STAGGER);
+
+    return () => {
+      if (animationRef.current) {
+        clearInterval(animationRef.current);
+      }
+    };
+  }, [entryStates, cardId]);
+
+  // Remove bubbles after DISPLAY_TIME
+  useEffect(() => {
+    if (!visible.length) return;
+    const timers = visible.map((v, i) =>
+      setTimeout(() => {
+        setVisible(prev => prev.filter(b => b.key !== v.key));
+      }, DISPLAY_TIME)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [visible]);
+
+  // Function to detect URLs in text and replace with clickable [link]
+  const detectAndReplaceUrl = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#7ecbff', textDecoration: 'underline', pointerEvents: 'auto' }}
+          >
+            [link]
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
+  if (!entryStates || entryStates.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 z-30 pointer-events-none">
+      <AnimatePresence>
+        {visible.map(({ idx, key }) => {
+          const state = entryStates[idx];
+          return (
+            <motion.div
+              key={key}
+              initial={{ opacity: 0, scale: 0.6, y: -30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.6, y: 30 }}
+              transition={{ 
+                duration: FADE_DURATION / 1000,
+                ease: [0.4, 0, 0.2, 1], // More gentle easing curve
+                opacity: { duration: FADE_DURATION / 1000 },
+                scale: { duration: FADE_DURATION / 1000 },
+                y: { duration: FADE_DURATION / 1000 }
+              }}
+              className="absolute flex items-start p-3 backdrop-blur-xl rounded-lg"
+              style={{
+                left: state.position.x - state.dimensions.width / 2,
+                top: state.position.y - state.dimensions.height / 2,
+                width: state.dimensions.width,
+                height: state.dimensions.height,
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                pointerEvents: 'none',
+                fontFamily: 'Papyrus',
+                zIndex: 1
+              }}
+            >
+              <div
+                className="flex-1 overflow-hidden text-left pb-4 pr-2 select-none"
+                style={{
+                  fontWeight: 400,
+                  color: '#ffffff',
+                  textShadow: '0 1px 4px rgba(0,0,0,1.0)',
+                  fontSize: '18px',
+                  lineHeight: '1.4',
+                  letterSpacing: '0.02em'
+                }}
+              >
+                {detectAndReplaceUrl(state.text)}
+              </div>
+            </motion.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 };
